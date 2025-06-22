@@ -60,13 +60,97 @@
             </section>
 
             <section id="site-settings-section" class="admin-section" style="display: none;">
-                <h2>Site Settings</h2>
-                <p>Site settings management will go here (logo, favicon, SMTP, etc.).</p>
+                <header class="section-header">
+                    <h2>Site Settings</h2>
+                </header>
+                <form id="siteSettingsForm">
+                    <fieldset>
+                        <legend>General Settings</legend>
+                        <div class="form-group">
+                            <label for="settingSiteName">Site Name</label>
+                            <input type="text" id="settingSiteName" name="settings[site_name]">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingLogoUrl">Logo URL</label>
+                            <input type="url" id="settingLogoUrl" name="settings[logo_url]" placeholder="https://example.com/logo.png">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingFaviconUrl">Favicon URL</label>
+                            <input type="url" id="settingFaviconUrl" name="settings[favicon_url]" placeholder="https://example.com/favicon.ico">
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>SMTP Settings (for Email Notifications)</legend>
+                        <div class="form-group">
+                            <label for="settingSmtpHost">SMTP Host</label>
+                            <input type="text" id="settingSmtpHost" name="settings[smtp_host]">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingSmtpPort">SMTP Port</label>
+                            <input type="number" id="settingSmtpPort" name="settings[smtp_port]" min="1" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingSmtpUser">SMTP Username</label>
+                            <input type="text" id="settingSmtpUser" name="settings[smtp_user]">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingSmtpPassword">SMTP Password</label>
+                            <input type="password" id="settingSmtpPassword" name="settings[smtp_password]">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingSmtpFromEmail">SMTP From Email</label>
+                            <input type="email" id="settingSmtpFromEmail" name="settings[smtp_from_email]">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingSmtpFromName">SMTP From Name</label>
+                            <input type="text" id="settingSmtpFromName" name="settings[smtp_from_name]">
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Security Settings</legend>
+                        <div class="form-group">
+                            <label for="settingEnable2fa">Enable Two-Factor Authentication (2FA)</label>
+                            <select id="settingEnable2fa" name="settings[enable_2fa]">
+                                <option value="false">Disabled</option>
+                                <option value="true">Enabled (Requires further setup)</option>
+                            </select>
+                            <p class="form-text text-muted"><small>Note: Enabling 2FA here is a placeholder. Full 2FA implementation is a separate, complex feature.</small></p>
+                        </div>
+                    </fieldset>
+
+                    <button type="submit" class="button-primary">Save Settings</button>
+                </form>
             </section>
 
             <section id="error-logs-section" class="admin-section" style="display: none;">
-                <h2>Error Logs Viewer</h2>
-                <p>Interface to view error logs from the database will go here.</p>
+                <header class="section-header">
+                    <h2>Error Logs Viewer</h2>
+                </header>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Timestamp</th>
+                                <th>Message</th>
+                                <th>File</th>
+                                <th>Line</th>
+                                <th>User Agent</th>
+                                <th>IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody id="errorLogTableBody">
+                            <!-- Error log data will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination-controls" id="errorLogPagination">
+                    <button id="errorLogPrevPage" class="button">Previous</button>
+                    <span id="errorLogPageInfo">Page 1 of 1</span>
+                    <button id="errorLogNextPage" class="button">Next</button>
+                </div>
             </section>
         </main>
     </div>

@@ -101,8 +101,74 @@ if (isset($_GET['action']) && $_GET['action'] === 'sync_note_tags' && $_SERVER['
     exit;
 }
 
+// --- Note Sharing Actions ---
+if (isset($_GET['action']) && $_GET['action'] === 'share_note' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    $note_id_to_share = (int)($_POST['note_id'] ?? 0);
+    $share_with_identifier = trim($_POST['share_with_user'] ?? ''); // Username or Email
+    $permission = 'read'; // Hardcoded to 'read' for Phase 1
+
+    if ($note_id_to_share <= 0 || empty($share_with_identifier)) {
+        echo json_encode(['success' => false, 'message' => 'Note ID and target user are required.']);
+        exit;
+    }
+
+    $pdo = getDBConnection();
+    try {
+        // 1. Validate note belongs to current user (the sharer)
+        $stmt_note_owner = $pdo->prepare("SELECT id FROM notes WHERE id = ? AND user_id = ?");
+        $stmt_note_owner->execute([$note_id_to_share, $user_id]);
+        if (!$stmt_note_owner->fetch()) {
+            echo json_encode(['success' => false, 'message' => 'Note not found or you do not own this note.']);
+            exit;
+        }
+
+        // 2. Find target user by username or email
+        $stmt_target_user = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
+        $stmt_target_user->execute([$share_with_identifier, $share_with_identifier]);
+        $target_user = $stmt_target_user->fetch();
+
+        if (!$target_user) {
+            echo json_encode(['success' => false, 'message' => 'Target user not found.']);
+            exit;
+        }
+        $target_user_id = $target_user['id'];
+
+        // 3. Ensure not sharing with oneself
+        if ($target_user_id === $user_id) {
+            echo json_encode(['success' => false, 'message' => 'You cannot share a note with yourself.']);
+            exit;
+        }
+
+        // 4. Check if already shared with this user
+        $stmt_check_existing_share = $pdo->prepare("SELECT id FROM shared_notes WHERE note_id = ? AND shared_with_user_id = ?");
+        $stmt_check_existing_share->execute([$note_id_to_share, $target_user_id]);
+        if ($stmt_check_existing_share->fetch()) {
+            // For Phase 1, if already shared, consider it a success or inform.
+            // Later, this could update permission if different.
+            echo json_encode(['success' => true, 'message' => 'Note is already shared with this user with read permission.']);
+            exit;
+        }
+
+        // 5. Insert into shared_notes
+        $stmt_insert_share = $pdo->prepare("INSERT INTO shared_notes (note_id, shared_with_user_id, shared_by_user_id, permission) VALUES (?, ?, ?, ?)");
+        if ($stmt_insert_share->execute([$note_id_to_share, $target_user_id, $user_id, $permission])) {
+            echo json_encode(['success' => true, 'message' => 'Note shared successfully with read-only permission.']);
+        } else {
+            log_error("Failed to share note ID $note_id_to_share with user ID $target_user_id", __FILE__, __LINE__);
+            echo json_encode(['success' => false, 'message' => 'Failed to share note due to a server error.']);
+        }
+
+    } catch (PDOException $e) {
+        log_error("PDOException while sharing note: " . $e->getMessage(), __FILE__, __LINE__);
+        echo json_encode(['success' => false, 'message' => 'Database error during note sharing.']);
+    }
+    exit;
+}
+
+
 // --- Fetch User Data (Example) ---
-$user_id = $_SESSION['user_id'];
+$user_id = $_SESSION['user_id']; // User's ID from session (was mislabelled as Admin's before here)
 $username = $_SESSION['username']; // Set during login
 
 // --- Prepare data for the dashboard (will be expanded significantly) ---
@@ -462,14 +528,39 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete_folder' && isset($_POS
 function getInitialDashboardData($pdo, $user_id) {
     $data = [];
 
-    // Fetch all notes for the user
-    $stmt_notes = $pdo->prepare("SELECT id, title, LEFT(content, 100) as snippet, updated_at, folder_id FROM notes WHERE user_id = ? ORDER BY updated_at DESC");
-    $stmt_notes->execute([$user_id]);
-    $notes = $stmt_notes->fetchAll(PDO::FETCH_ASSOC);
-    $note_ids = array_column($notes, 'id');
+    // 1. Fetch notes owned by the user
+    $stmt_owned_notes = $pdo->prepare("
+        SELECT id, title, LEFT(content, 100) as snippet, updated_at, folder_id, user_id as owner_user_id,
+               NULL as shared_by_username, 'owner' as note_status, NULL as permission
+        FROM notes
+        WHERE user_id = ?
+    ");
+    $stmt_owned_notes->execute([$user_id]);
+    $owned_notes = $stmt_owned_notes->fetchAll(PDO::FETCH_ASSOC);
 
-    // Fetch all tags associated with these notes
+    // 2. Fetch notes shared with the user
+    $stmt_shared_notes = $pdo->prepare("
+        SELECT n.id, n.title, LEFT(n.content, 100) as snippet, n.updated_at, n.folder_id, n.user_id as owner_user_id,
+               u_owner.username as shared_by_username, 'shared' as note_status, sn.permission
+        FROM notes n
+        JOIN shared_notes sn ON n.id = sn.note_id
+        JOIN users u_owner ON n.user_id = u_owner.id
+        WHERE sn.shared_with_user_id = ?
+    ");
+    $stmt_shared_notes->execute([$user_id]);
+    $shared_notes_with_user = $stmt_shared_notes->fetchAll(PDO::FETCH_ASSOC);
+
+    // Combine owned and shared notes. Ensure no duplicates if logic allows sharing own notes (it doesn't currently).
+    // Mark them appropriately.
+    $all_display_notes = array_merge($owned_notes, $shared_notes_with_user);
+    // Sort all notes by updated_at date after merging
+    usort($all_display_notes, function($a, $b) {
+        return strtotime($b['updated_at']) - strtotime($a['updated_at']);
+    });
+
+    $note_ids = array_column($all_display_notes, 'id');
     $note_tags_map = [];
+
     if (!empty($note_ids)) {
         $placeholders = implode(',', array_fill(0, count($note_ids), '?'));
         $stmt_note_tags = $pdo->prepare("
@@ -484,14 +575,13 @@ function getInitialDashboardData($pdo, $user_id) {
         }
     }
 
-    // Attach tags to each note
-    foreach ($notes as &$note) { // Use reference to modify array directly
+    foreach ($all_display_notes as &$note) {
         $note['tags'] = $note_tags_map[$note['id']] ?? [];
     }
-    unset($note); // Unset reference
-    $data['notes'] = $notes;
+    unset($note);
+    $data['notes'] = $all_display_notes;
 
-    // Fetch all folders for the user
+    // Fetch all folders for the user (only their own folders)
     $stmt_folders = $pdo->prepare("SELECT id, name FROM folders WHERE user_id = ? ORDER BY name ASC");
     $stmt_folders->execute([$user_id]);
     $data['folders'] = $stmt_folders->fetchAll(PDO::FETCH_ASSOC);

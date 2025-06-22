@@ -162,3 +162,17 @@ table .actions-cell .delete-btn:hover {
 /* Specific section display is handled by JS */
 /* .admin-section { display: none; } */
 /* .admin-section.active-section { display: block; } */
+
+.pagination-controls {
+    margin-top: 1.5rem;
+    text-align: center;
+}
+.pagination-controls button {
+    margin: 0 0.5rem;
+    padding: 0.5rem 1rem;
+}
+.pagination-controls span {
+    margin: 0 1rem;
+    font-size: 0.95rem;
+    color: #555;
+}

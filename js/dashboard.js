@@ -35,9 +35,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const currentNoteTagsDisplay = document.getElementById('currentNoteTagsDisplay');
     const noteLastUpdated = document.getElementById('noteLastUpdated');
 
+    // Share Note Modal Elements
+    const shareNoteModal = document.getElementById('shareNoteModal');
+    const shareNoteForm = document.getElementById('shareNoteForm');
+    const closeShareNoteModalBtn = shareNoteModal ? shareNoteModal.querySelector('.close-button') : null;
+    const shareNoteIdInput = document.getElementById('shareNoteIdInput');
+    const shareWithUserInput = document.getElementById('shareWithUserInput');
+
 
     // --- State Variables ---
     let currentNoteId = null;
+    let currentNoteIsSharedWithUser = false; // Flag to indicate if the loaded note is shared with current user
     let currentNoteTags = []; // Holds array of {id, name} for the currently edited note
     let currentUser = null;
     let allNotes = [];
@@ -210,14 +218,20 @@ document.addEventListener('DOMContentLoaded', function() {
             li.dataset.noteId = note.id;
 
             const date = new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            let titleHTML = `<h4>${escapeHTML(note.title) || 'Untitled Note'}</h4>`;
+
+            if (note.note_status === 'shared') {
+                titleHTML += `<small class="shared-indicator">(Shared by ${escapeHTML(note.shared_by_username)})</small>`;
+                li.classList.add('shared-note-item'); // For specific styling of shared notes
+            }
 
             li.innerHTML = `
-                <h4>${escapeHTML(note.title) || 'Untitled Note'}</h4>
+                ${titleHTML}
                 <p>${escapeHTML(note.snippet) || 'No additional text'}</p>
                 <small>${date}</small>
             `;
             li.addEventListener('click', () => {
-                loadNoteIntoEditor(note.id);
+                loadNoteIntoEditor(note.id); // loadNoteIntoEditor will check note_status for read-only
                 setActiveNoteListItem(note.id);
             });
             noteListUl.appendChild(li);
@@ -295,18 +309,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 noteLastUpdated.textContent = `Last updated: ${new Date(noteData.updated_at).toLocaleString()}`;
             }
 
+            currentNoteIsSharedWithUser = (noteData.note_status === 'shared');
+            const isReadOnly = currentNoteIsSharedWithUser && noteData.permission === 'read';
+
+            // Enable/Disable editor fields based on read-only status
+            if (noteTitleInput) noteTitleInput.disabled = isReadOnly;
+            if (noteContentTextarea) noteContentTextarea.disabled = isReadOnly;
+            if (noteFolderSelect) noteFolderSelect.disabled = isReadOnly;
+            if (noteTagsInput) noteTagsInput.disabled = isReadOnly;
+            // Disable remove buttons on tag pills if read-only
+            currentNoteTagsDisplay.querySelectorAll('.remove-tag-btn').forEach(btn => btn.style.display = isReadOnly ? 'none' : 'inline');
+
+
+            if (saveNoteBtn) saveNoteBtn.style.display = isReadOnly ? 'none' : 'inline-block';
+            // If it's a shared note, user shouldn't be able to re-share or delete it (for now)
+            if (shareNoteBtn) shareNoteBtn.style.display = isReadOnly ? 'none' : 'inline-block'; // Hide share if it's already a shared note they are viewing
+            if (deleteNoteBtn) deleteNoteBtn.style.display = isReadOnly ? 'none' : 'inline-block';
+
+
         } else { // No note selected or new note state
             noteEditorPanel.classList.add('empty');
             editorContentWrapper.style.display = 'none'; // Hide content wrapper
 
-            noteTitleInput.value = '';
-            noteContentTextarea.value = '';
+            if (noteTitleInput) noteTitleInput.value = '';
+            if (noteContentTextarea) noteContentTextarea.value = '';
             if (noteFolderSelect) noteFolderSelect.value = ""; // Reset folder dropdown
             currentNoteId = null;
+            currentNoteIsSharedWithUser = false;
             currentNoteTags = [];
             renderCurrentNoteTags();
             if (noteTagsInput) noteTagsInput.value = '';
             if (noteLastUpdated) noteLastUpdated.textContent = 'Last updated: N/A';
+
+            // Reset all editor fields to enabled by default when no note is selected (or new note)
+            if (noteTitleInput) noteTitleInput.disabled = false;
+            if (noteContentTextarea) noteContentTextarea.disabled = false;
+            if (noteFolderSelect) noteFolderSelect.disabled = false;
+            if (noteTagsInput) noteTagsInput.disabled = false;
+            if (saveNoteBtn) saveNoteBtn.style.display = 'inline-block';
+            if (shareNoteBtn) shareNoteBtn.style.display = 'inline-block'; // Show share for owned new/empty note
+            if (deleteNoteBtn) deleteNoteBtn.style.display = 'inline-block';
         }
     }
 
@@ -453,6 +495,25 @@ document.addEventListener('DOMContentLoaded', function() {
             deleteNoteBtn.addEventListener('click', deleteCurrentNote);
         }
 
+        if (shareNoteBtn) {
+            shareNoteBtn.addEventListener('click', () => {
+                if (!currentNoteId) {
+                    showGlobalNotification("Please select a note to share.", "info");
+                    return;
+                }
+                if (currentNoteIsSharedWithUser) { // Should not happen as button is hidden
+                    showGlobalNotification("This note is already shared with you and cannot be re-shared.", "info");
+                    return;
+                }
+                if (shareNoteModal && shareNoteIdInput && shareNoteForm) {
+                    shareNoteForm.reset();
+                    shareNoteIdInput.value = currentNoteId;
+                    shareNoteModal.style.display = 'flex';
+                    if(shareWithUserInput) shareWithUserInput.focus();
+                }
+            });
+        }
+
         // New Folder Modal listeners
         if (newFolderBtn && newFolderModal && closeNewFolderModalBtn && confirmNewFolderBtn && newFolderNameInput) {
             newFolderBtn.addEventListener('click', () => {
@@ -490,8 +551,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Generic modal closing by clicking outside
-        [newFolderModal, renameFolderModal].forEach(modal => {
+        [newFolderModal, renameFolderModal, shareNoteModal].forEach(modal => {
             if (modal) {
+                const closeBtn = modal.querySelector('.close-button');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => modal.style.display = 'none');
+                }
                 window.addEventListener('click', (event) => {
                     if (event.target == modal) {
                         modal.style.display = 'none';

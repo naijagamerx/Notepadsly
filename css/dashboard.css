@@ -491,6 +491,24 @@
     white-space: nowrap; /* Prevent metadata from wrapping if possible */
 }
 
+.note-item .shared-indicator {
+    font-size: 0.75em;
+    color: #007bff; /* Or another distinct color */
+    margin-left: 8px;
+    font-weight: normal;
+}
+
+.note-item.shared-note-item {
+    /* Optionally add a specific background or border to distinguish shared notes in the list */
+    /* border-left: 3px solid #007bff; */
+    /* background-color: #e7f3ff; */
+}
+.note-item.shared-note-item.active {
+    /* Ensure active shared note style is also distinct or overrides default active */
+    background-color: #d6eaff; /* Slightly different active color for shared notes */
+    border-left: 3px solid #0056b3;
+}
+
 
 /* App Footer (for mobile menu) */
 .app-footer {

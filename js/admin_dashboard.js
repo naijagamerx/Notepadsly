@@ -20,13 +20,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const editEmailInput = document.getElementById('editEmail');
     const editRoleInput = document.getElementById('editRole');
 
+    // Site Settings Form Elements
+    const siteSettingsForm = document.getElementById('siteSettingsForm');
+
+    // Error Log Elements
+    const errorLogTableBody = document.getElementById('errorLogTableBody');
+    const errorLogPaginationControls = document.getElementById('errorLogPagination');
+    const errorLogPrevPageBtn = document.getElementById('errorLogPrevPage');
+    const errorLogNextPageBtn = document.getElementById('errorLogNextPage');
+    const errorLogPageInfo = document.getElementById('errorLogPageInfo');
+    let currentErrorLogPage = 1;
+    const errorLogLimit = 25; // Should match backend default or be passed as param
 
     // --- Initialization ---
     function initializeAdminDashboard() {
         fetchAdminData();
-        loadUsers();
         setupEventListeners();
-        // Show user-management by default
         showSection('user-management');
     }
 
@@ -37,25 +46,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success && data.username && adminUsernameDisplay) {
                     adminUsernameDisplay.textContent = `Welcome, ${data.username}! (Admin)`;
                 } else if (!data.success) {
-                    // If not authorized (e.g. session expired, or not admin)
-                    // admin_handler.php already checks for admin role.
-                    // Redirect to login if unauthorized, or show error.
-                    // showGlobalNotification will likely not be visible if redirecting immediately.
-                    // The primary defense is server-side; client-side is for UX.
                     console.error(data.message || "Unauthorized access to admin panel.");
-                    window.location.href = '/login'; // Updated to extension-less URL
+                    window.location.href = '/login';
                 }
             })
             .catch(error => {
                 console.error('Error fetching admin data:', error);
-                // showGlobalNotification("Could not load admin information. Redirecting to login.", "error");
-                window.location.href = '/login'; // Updated to extension-less URL
+                window.location.href = '/login';
             });
     }
 
     function loadUsers() {
         if (!userListTableBody) return;
-
         fetch('../php/admin_handler.php?action=get_all_users')
             .then(response => response.json())
             .then(data => {
@@ -73,13 +75,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderUserList(users) {
         if (!userListTableBody) return;
-        userListTableBody.innerHTML = ''; // Clear existing
-
+        userListTableBody.innerHTML = '';
         if (users.length === 0) {
             userListTableBody.innerHTML = '<tr><td colspan="6">No users found.</td></tr>';
             return;
         }
-
         users.forEach(user => {
             const row = userListTableBody.insertRow();
             row.innerHTML = `
@@ -93,53 +93,117 @@ document.addEventListener('DOMContentLoaded', function() {
                     <button class="delete-btn" data-user-id="${user.id}" title="Delete User">&times;</button>
                 </td>
             `;
-
-            // Add event listeners for edit/delete buttons
             const editBtn = row.querySelector('.edit-btn');
-            if (editBtn) {
-                editBtn.addEventListener('click', () => openEditUserModal(user.id));
-            }
+            if (editBtn) editBtn.addEventListener('click', () => openEditUserModal(user.id));
             const deleteBtn = row.querySelector('.delete-btn');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', () => confirmDeleteUser(user.id, user.username));
-            }
+            if (deleteBtn) deleteBtn.addEventListener('click', () => confirmDeleteUser(user.id, user.username));
         });
     }
 
-    // Function to clear form errors
     function clearFormErrors(formElement) {
+        if (!formElement) return;
         formElement.querySelectorAll('.error-message').forEach(el => el.textContent = '');
     }
 
-    // Function to display form errors
     function displayFormErrors(formElement, errors) {
-        clearFormErrors(formElement); // Clear previous errors
+        if (!formElement) return;
+        clearFormErrors(formElement);
         for (const field in errors) {
-            const errorElId = `${formElement.id.replace('Form','').toLowerCase()}${field.charAt(0).toUpperCase() + field.slice(1)}Error`; // e.g. addUsernameError
+            const errorElId = `${formElement.id.replace('Form','').toLowerCase()}${field.charAt(0).toUpperCase() + field.slice(1)}Error`;
             const fieldErrorEl = formElement.querySelector(`#${errorElId}`);
             if (fieldErrorEl) {
                 fieldErrorEl.textContent = errors[field];
-            } else { // Fallback if specific error field not found (e.g. general message)
+            } else {
                  console.warn(`Error field for ${field} not found in form ${formElement.id}`);
             }
         }
     }
 
+    function loadSiteSettings() {
+        if (!siteSettingsForm) return;
+        fetch('../php/admin_handler.php?action=get_site_settings')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.settings) {
+                    for (const key in data.settings) {
+                        const inputName = `settings[${key}]`;
+                        if (siteSettingsForm.elements[inputName]) {
+                            siteSettingsForm.elements[inputName].value = data.settings[key];
+                        }
+                    }
+                } else {
+                    showGlobalNotification(data.message || 'Failed to load site settings.', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading site settings:', error);
+                showGlobalNotification('An error occurred while loading site settings.', 'error');
+            });
+    }
+
+    function loadErrorLogs(page = 1) {
+        if (!errorLogTableBody) return;
+        currentErrorLogPage = page;
+        fetch(`../php/admin_handler.php?action=get_error_logs&page=${page}&limit=${errorLogLimit}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.logs) {
+                    renderErrorLogs(data.logs, data.pagination);
+                } else {
+                    errorLogTableBody.innerHTML = `<tr><td colspan="7">Error loading logs: ${data.message || 'Unknown error'}</td></tr>`;
+                    if(errorLogPaginationControls) errorLogPaginationControls.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching error logs:', error);
+                errorLogTableBody.innerHTML = `<tr><td colspan="7">Failed to fetch error logs from server.</td></tr>`;
+                if(errorLogPaginationControls) errorLogPaginationControls.style.display = 'none';
+            });
+    }
+
+    function renderErrorLogs(logs, pagination) {
+        if (!errorLogTableBody) return;
+        errorLogTableBody.innerHTML = '';
+
+        if (logs.length === 0) {
+            errorLogTableBody.innerHTML = '<tr><td colspan="7">No error logs found.</td></tr>';
+            if(errorLogPaginationControls) errorLogPaginationControls.style.display = 'none';
+            return;
+        }
+        if(errorLogPaginationControls) errorLogPaginationControls.style.display = 'block';
+
+
+        logs.forEach(log => {
+            const row = errorLogTableBody.insertRow();
+            row.innerHTML = `
+                <td>${log.id}</td>
+                <td>${new Date(log.timestamp).toLocaleString()}</td>
+                <td title="${escapeHTML(log.error_message)}">${escapeHTML(log.error_message.substring(0,100))}${log.error_message.length > 100 ? '...' : ''}</td>
+                <td>${escapeHTML(log.file_path)}</td>
+                <td>${log.line_number}</td>
+                <td title="${escapeHTML(log.user_agent)}">${escapeHTML(log.user_agent.substring(0,30))}${log.user_agent.length > 30 ? '...' : ''}</td>
+                <td>${escapeHTML(log.ip_address)}</td>
+            `;
+        });
+
+        // Update pagination controls
+        if (errorLogPageInfo) errorLogPageInfo.textContent = `Page ${pagination.currentPage} of ${pagination.totalPages} (Total: ${pagination.totalLogs})`;
+        if (errorLogPrevPageBtn) errorLogPrevPageBtn.disabled = pagination.currentPage <= 1;
+        if (errorLogNextPageBtn) errorLogNextPageBtn.disabled = pagination.currentPage >= pagination.totalPages;
+    }
+
 
     function setupEventListeners() {
-        // Sidebar navigation
         sidebarLinks.forEach(link => {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
                 const sectionId = this.dataset.section;
                 showSection(sectionId);
-
                 sidebarLinks.forEach(s_link => s_link.classList.remove('active'));
                 this.classList.add('active');
             });
         });
 
-        // Add User Modal
         if (addUserBtn) {
             addUserBtn.addEventListener('click', () => {
                 if (addUserForm) addUserForm.reset();
@@ -158,16 +222,13 @@ document.addEventListener('DOMContentLoaded', function() {
             addUserForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 const formData = new FormData(addUserForm);
-                fetch('../php/admin_handler.php?action=add_user', {
-                    method: 'POST',
-                    body: formData
-                })
+                fetch('../php/admin_handler.php?action=add_user', { method: 'POST', body: formData })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         showGlobalNotification(data.message || 'User added successfully!', 'success');
                         if (addUserModal) addUserModal.style.display = 'none';
-                        loadUsers(); // Refresh user list
+                        loadUsers();
                     } else {
                         showGlobalNotification(data.message || 'Failed to add user.', 'error');
                         if (data.errors) displayFormErrors(addUserForm, data.errors);
@@ -180,7 +241,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // Edit User Modal
         if (closeEditUserModalBtn) {
             closeEditUserModalBtn.addEventListener('click', () => {
                 if (editUserModal) editUserModal.style.display = 'none';
@@ -190,16 +250,13 @@ document.addEventListener('DOMContentLoaded', function() {
             editUserForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 const formData = new FormData(editUserForm);
-                fetch('../php/admin_handler.php?action=update_user', {
-                    method: 'POST',
-                    body: formData
-                })
+                fetch('../php/admin_handler.php?action=update_user', { method: 'POST', body: formData })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         showGlobalNotification(data.message || 'User updated successfully!', 'success');
                         if (editUserModal) editUserModal.style.display = 'none';
-                        loadUsers(); // Refresh user list
+                        loadUsers();
                     } else {
                         showGlobalNotification(data.message || 'Failed to update user.', 'error');
                         if (data.errors) displayFormErrors(editUserForm, data.errors);
@@ -212,31 +269,64 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // Generic modal closing by clicking outside (for admin modals)
         [addUserModal, editUserModal].forEach(modal => {
             if (modal) {
                 window.addEventListener('click', (event) => {
-                    if (event.target == modal) {
-                        modal.style.display = 'none';
-                    }
+                    if (event.target == modal) modal.style.display = 'none';
                 });
             }
         });
 
-    } // End of setupEventListeners
+        if (siteSettingsForm) {
+            siteSettingsForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(siteSettingsForm);
+                fetch('../php/admin_handler.php?action=update_site_settings', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showGlobalNotification(data.message || 'Settings updated successfully!', 'success');
+                    } else {
+                        showGlobalNotification(data.message || 'Failed to update settings.', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Update Site Settings Error:', error);
+                    showGlobalNotification('An error occurred while updating settings.', 'error');
+                });
+            });
+        }
+
+        if(errorLogPrevPageBtn) {
+            errorLogPrevPageBtn.addEventListener('click', () => {
+                if (currentErrorLogPage > 1) {
+                    loadErrorLogs(currentErrorLogPage - 1);
+                }
+            });
+        }
+        if(errorLogNextPageBtn) {
+            errorLogNextPageBtn.addEventListener('click', () => {
+                // Check against totalPages if available from pagination data
+                loadErrorLogs(currentErrorLogPage + 1);
+            });
+        }
+
+    }
 
     function openEditUserModal(userId) {
         if (!editUserModal || !editUserForm) return;
         clearFormErrors(editUserForm);
-
         fetch(`../php/admin_handler.php?action=get_user_details&user_id=${userId}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.user) {
-                    editUserIdInput.value = data.user.id;
-                    editUsernameInput.value = data.user.username;
-                    editEmailInput.value = data.user.email;
-                    editRoleInput.value = data.user.role;
+                    if(editUserIdInput) editUserIdInput.value = data.user.id;
+                    if(editUsernameInput) editUsernameInput.value = data.user.username;
+                    if(editEmailInput) editEmailInput.value = data.user.email;
+                    if(editRoleInput) editRoleInput.value = data.user.role;
                     editUserModal.style.display = 'flex';
                 } else {
                     showGlobalNotification(data.message || 'Failed to fetch user details.', 'error');
@@ -257,16 +347,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function deleteUser(userId) {
         const formData = new FormData();
         formData.append('user_id', userId);
-
-        fetch('../php/admin_handler.php?action=delete_user', {
-            method: 'POST',
-            body: formData
-        })
+        fetch('../php/admin_handler.php?action=delete_user', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showGlobalNotification(data.message || 'User deleted successfully!', 'success');
-                loadUsers(); // Refresh user list
+                loadUsers();
             } else {
                 showGlobalNotification(data.message || 'Failed to delete user.', 'error');
             }
@@ -281,47 +367,40 @@ document.addEventListener('DOMContentLoaded', function() {
         adminSections.forEach(section => {
             if (section.id === sectionId + '-section') {
                 section.style.display = 'block';
+                if (sectionId === 'user-management') loadUsers();
+                if (sectionId === 'site-settings') loadSiteSettings();
+                if (sectionId === 'error-logs') loadErrorLogs();
             } else {
                 section.style.display = 'none';
             }
         });
     }
 
-    // --- Utility Functions ---
     function escapeHTML(str) {
         if (str === null || str === undefined) return '';
         return String(str).replace(/[&<>"']/g, function (match) {
-            return {
-                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-            }[match];
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match];
         });
     }
 
-    // --- Start the application ---
     initializeAdminDashboard();
 });
 
-// --- Global Notification Function (can be moved to a shared utility JS file later) ---
 let adminNotificationTimeout;
 function showGlobalNotification(message, type = 'info', duration = 3000) {
     const notificationElement = document.getElementById('globalNotification');
     if (!notificationElement) return;
-
     clearTimeout(adminNotificationTimeout);
-
     notificationElement.textContent = message;
     notificationElement.className = 'global-notification';
     notificationElement.classList.add(type);
-
     const header = document.querySelector('.app-header');
     if (header && getComputedStyle(header).position === 'fixed') {
         notificationElement.style.top = `${header.offsetHeight}px`;
     } else {
         notificationElement.style.top = '0px';
     }
-
     notificationElement.style.display = 'block';
-
     adminNotificationTimeout = setTimeout(() => {
         notificationElement.style.display = 'none';
         notificationElement.style.top = '0px';

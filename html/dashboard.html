@@ -117,6 +117,30 @@
         </div>
     </div>
 
+    <!-- Share Note Modal -->
+    <div id="shareNoteModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-button" data-modal-id="shareNoteModal">&times;</span>
+            <h4>Share Note</h4>
+            <form id="shareNoteForm">
+                <input type="hidden" id="shareNoteIdInput">
+                <div class="form-group">
+                    <label for="shareWithUserInput">Share with (Username or Email):</label>
+                    <input type="text" id="shareWithUserInput" name="share_with_user" required>
+                </div>
+                <!-- For Phase 1, permission is 'read' by default, no UI needed yet -->
+                <!-- <div class="form-group">
+                    <label for="sharePermissionInput">Permission:</label>
+                    <select id="sharePermissionInput" name="permission">
+                        <option value="read" selected>Read-Only</option>
+                        <option value="edit">Edit</option>
+                    </select>
+                </div> -->
+                <button type="submit" class="button-primary">Share Note</button>
+            </form>
+        </div>
+    </div>
+
     <div class="note-editor-panel">
         <div class="panel-header">
             <input type="text" id="noteTitleInput" placeholder="Note Title" value="Grocery List">

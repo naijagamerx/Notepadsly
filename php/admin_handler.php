@@ -168,16 +168,89 @@ try {
             }
             break;
 
-        // case 'get_site_settings':
-            // Fetch from admin_settings table
-            // break;
-        // case 'update_site_setting':
-            // Update admin_settings table
-            // break;
+        case 'get_site_settings':
+            $stmt_settings = $pdo->query("SELECT setting_key, setting_value FROM admin_settings");
+            $settings_array = $stmt_settings->fetchAll(PDO::FETCH_KEY_PAIR);
+            echo json_encode(['success' => true, 'settings' => $settings_array]);
+            break;
 
-        // case 'get_error_logs':
-            // Fetch from error_logs table (paginated)
-            // break;
+        case 'update_site_settings':
+            // Expects settings as a POST array: $_POST['settings']['site_name'] = 'New Name', etc.
+            $posted_settings = $_POST['settings'] ?? [];
+            if (empty($posted_settings) || !is_array($posted_settings)) {
+                echo json_encode(['success' => false, 'message' => 'No settings data provided or invalid format.']);
+                break;
+            }
+
+            $allowed_keys = [ // Define keys that can be updated to prevent arbitrary updates
+                'site_name', 'logo_url', 'favicon_url',
+                'smtp_host', 'smtp_port', 'smtp_user', 'smtp_password',
+                'smtp_from_email', 'smtp_from_name', 'enable_2fa'
+            ];
+
+            $pdo->beginTransaction();
+            try {
+                $stmt_update_setting = $pdo->prepare("UPDATE admin_settings SET setting_value = ? WHERE setting_key = ?");
+                $updated_count = 0;
+
+                foreach ($posted_settings as $key => $value) {
+                    if (in_array($key, $allowed_keys)) {
+                        // Basic sanitization/validation can be added here per key
+                        if ($key === 'smtp_port' && !empty($value) && !filter_var($value, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1, "max_range" => 65535]])) {
+                            // Skip invalid port
+                            continue;
+                        }
+                        if ($key === 'enable_2fa') { // Ensure boolean-like storage
+                            $value = ($value === 'true' || $value === '1' || $value === true) ? 'true' : 'false';
+                        }
+
+                        $stmt_update_setting->execute([trim($value), $key]);
+                        if ($stmt_update_setting->rowCount() > 0) {
+                             $updated_count++;
+                        }
+                    } else {
+                        log_error("Admin: Attempt to update disallowed setting key '$key'", __FILE__, __LINE__);
+                    }
+                }
+                $pdo->commit();
+                echo json_encode(['success' => true, 'message' => $updated_count > 0 ? 'Settings updated successfully.' : 'No settings were changed.']);
+            } catch (PDOException $e) {
+                $pdo->rollBack();
+                log_error("Admin: Failed to update site settings: " . $e->getMessage(), __FILE__, __LINE__);
+                echo json_encode(['success' => false, 'message' => 'Database error updating settings.']);
+            }
+            break;
+
+        case 'get_error_logs':
+            $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 25; // Default 25 logs per page
+            if ($page < 1) $page = 1;
+            if ($limit < 5) $limit = 5;
+            if ($limit > 100) $limit = 100; // Max limit
+            $offset = ($page - 1) * $limit;
+
+            // Get total count for pagination
+            $stmt_total = $pdo->query("SELECT COUNT(*) FROM error_logs");
+            $total_logs = (int)$stmt_total->fetchColumn();
+            $total_pages = ceil($total_logs / $limit);
+
+            $stmt_logs = $pdo->prepare("SELECT * FROM error_logs ORDER BY timestamp DESC LIMIT ? OFFSET ?");
+            $stmt_logs->bindParam(1, $limit, PDO::PARAM_INT);
+            $stmt_logs->bindParam(2, $offset, PDO::PARAM_INT);
+            $stmt_logs->execute();
+            $logs = $stmt_logs->fetchAll(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'success' => true,
+                'logs' => $logs,
+                'pagination' => [
+                    'currentPage' => $page,
+                    'perPage' => $limit,
+                    'totalPages' => $total_pages,
+                    'totalLogs' => $total_logs
+                ]
+            ]);
+            break;
 
         default:
             echo json_encode(['success' => false, 'message' => 'Unknown admin action or action not specified.']);
