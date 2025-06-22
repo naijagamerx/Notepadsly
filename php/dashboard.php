@@ -588,15 +588,16 @@ function getInitialDashboardData($pdo, $user_id) {
 
     // Fetch all unique tags used by the user (for the sidebar tag list)
     $stmt_all_user_tags = $pdo->prepare("
-        SELECT DISTINCT t.id, t.name
+        SELECT t.id, t.name, COUNT(n.id) as note_count
         FROM tags t
         JOIN note_tags nt ON t.id = nt.tag_id
         JOIN notes n ON nt.note_id = n.id
         WHERE n.user_id = ?
+        GROUP BY t.id, t.name
         ORDER BY t.name ASC
     ");
     $stmt_all_user_tags->execute([$user_id]);
-    $data['tags'] = $stmt_all_user_tags->fetchAll(PDO::FETCH_ASSOC);
+    $data['tags'] = $stmt_all_user_tags->fetchAll(PDO::FETCH_ASSOC); // Now includes note_count
 
     return $data;
 }

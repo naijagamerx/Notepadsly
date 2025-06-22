@@ -91,12 +91,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="actions-cell">
                     <button class="edit-btn" data-user-id="${user.id}" title="Edit User">&#9998;</button>
                     <button class="delete-btn" data-user-id="${user.id}" title="Delete User">&times;</button>
+                    <button class="reset-password-btn" data-user-id="${user.id}" title="Send Password Reset">&#128273;</button> <!-- Key icon -->
                 </td>
             `;
             const editBtn = row.querySelector('.edit-btn');
             if (editBtn) editBtn.addEventListener('click', () => openEditUserModal(user.id));
+
             const deleteBtn = row.querySelector('.delete-btn');
             if (deleteBtn) deleteBtn.addEventListener('click', () => confirmDeleteUser(user.id, user.username));
+
+            const resetPasswordBtn = row.querySelector('.reset-password-btn');
+            if (resetPasswordBtn) resetPasswordBtn.addEventListener('click', () => confirmTriggerPasswordReset(user.id, user.username));
         });
     }
 
@@ -360,6 +365,35 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Delete User Error:', error);
             showGlobalNotification('An error occurred while deleting the user.', 'error');
+        });
+    }
+
+    function confirmTriggerPasswordReset(userId, username) {
+        if (confirm(`Are you sure you want to trigger a password reset for user "${escapeHTML(username)}" (ID: ${userId})? They will need to check their email (conceptually).`)) {
+            triggerPasswordReset(userId);
+        }
+    }
+
+    function triggerPasswordReset(userId) {
+        const formData = new FormData();
+        formData.append('user_id', userId);
+
+        fetch('../php/admin_handler.php?action=trigger_password_reset', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showGlobalNotification(data.message || 'Password reset triggered successfully!', 'success');
+                // No need to reload user list for this action
+            } else {
+                showGlobalNotification(data.message || 'Failed to trigger password reset.', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Trigger Password Reset Error:', error);
+            showGlobalNotification('An error occurred while triggering password reset.', 'error');
         });
     }
 

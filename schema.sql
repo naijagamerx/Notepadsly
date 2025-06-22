@@ -63,8 +63,11 @@ CREATE TABLE shared_notes (
 -- Admin specific tables (as per prompt, admin has user management, etc.)
 -- No separate admin table for login, admin could be a user with a special role.
 -- We can add a 'role' column to the 'users' table.
+-- And columns for password reset functionality.
 
 ALTER TABLE users ADD COLUMN role ENUM('user', 'admin') DEFAULT 'user';
+ALTER TABLE users ADD COLUMN password_reset_token VARCHAR(255) DEFAULT NULL;
+ALTER TABLE users ADD COLUMN reset_token_expires_at TIMESTAMP NULL DEFAULT NULL;
 
 -- For admin settings like logo, fav icon, SMTP (could be a key-value store or separate columns)
 CREATE TABLE admin_settings (

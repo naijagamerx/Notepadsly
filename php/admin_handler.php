@@ -74,6 +74,47 @@ try {
             }
             break;
 
+        case 'trigger_password_reset':
+            // Requires: user_id (from POST)
+            $user_id_to_reset = (int)($_POST['user_id'] ?? 0);
+            if ($user_id_to_reset <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Invalid user ID for password reset.']);
+                break;
+            }
+
+            // Ensure admin is not trying to reset their own password via this admin function
+            // (they should use a regular "forgot password" flow if that existed)
+            // Though, there's no direct harm, it's unusual for an admin tool.
+            // if ($user_id_to_reset === $user_id) {
+            //     echo json_encode(['success' => false, 'message' => 'Admins should use a standard password recovery method if available.']);
+            //     break;
+            // }
+
+            try {
+                $token = bin2hex(random_bytes(32)); // Generate a secure random token
+                $expires_at = date('Y-m-d H:i:s', time() + 3600); // Token expires in 1 hour
+
+                $stmt_set_token = $pdo->prepare("UPDATE users SET password_reset_token = ?, reset_token_expires_at = ? WHERE id = ?");
+                if ($stmt_set_token->execute([$token, $expires_at, $user_id_to_reset])) {
+                    if ($stmt_set_token->rowCount() > 0) {
+                        // In a real app, an email would be sent here with a link like:
+                        // $reset_link = "https://yourdomain.com/reset-password?token=" . $token;
+                        // For now, we can return the token for testing or just a success message.
+                        log_error("Admin: Triggered password reset for user ID $user_id_to_reset. Token: $token", __FILE__, __LINE__); // Log for admin reference
+                        echo json_encode(['success' => true, 'message' => "Password reset triggered for user. (Token: $token - for testing purposes)"]);
+                    } else {
+                        echo json_encode(['success' => false, 'message' => 'User not found.']);
+                    }
+                } else {
+                    log_error("Admin: Failed to set password reset token for user ID $user_id_to_reset", __FILE__, __LINE__);
+                    echo json_encode(['success' => false, 'message' => 'Failed to trigger password reset.']);
+                }
+            } catch (Exception $e) { // Catches random_bytes exception if system can't generate secure random data
+                log_error("Admin: Error generating password reset token: " . $e->getMessage(), __FILE__, __LINE__);
+                echo json_encode(['success' => false, 'message' => 'Could not generate a secure token.']);
+            }
+            break;
+
         case 'get_user_details':
             // Requires: user_id
             $user_id_to_edit = (int)($_GET['user_id'] ?? 0);
@@ -128,8 +169,35 @@ try {
                 break;
             }
 
-            // Prevent admin from changing their own role if they are the only admin? (More complex logic)
-            // For now, allow role change.
+            // Prevent admin from changing their own role to 'user' if they are the only admin.
+            // Also prevents changing any admin's role to 'user' if they are the last admin.
+            if ($role === 'user') { // Only check if demoting to 'user'
+                $stmt_check_role = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+                $stmt_check_role->execute([$user_id_to_update]);
+                $current_role = $stmt_check_role->fetchColumn();
+
+                if ($current_role === 'admin') {
+                    $stmt_count_admins = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'");
+                    $admin_count = (int)$stmt_count_admins->fetchColumn();
+                    if ($admin_count <= 1) {
+                        // If this user is the only admin, prevent role change to 'user'
+                        echo json_encode(['success' => false, 'message' => 'Cannot change the role of the last admin user.']);
+                        break;
+                    }
+                }
+            }
+
+            // If admin is updating their own details, prevent them from changing their own role if they are the last admin.
+            // This is a more specific check if $user_id_to_update === $user_id (logged in admin)
+            if ($user_id_to_update === $user_id && $role === 'user') {
+                 $stmt_count_admins = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'");
+                 $admin_count = (int)$stmt_count_admins->fetchColumn();
+                 if($admin_count <=1) { // Check if current user is the only admin
+                      echo json_encode(['success' => false, 'message' => 'You cannot change your own role as you are the only admin.']);
+                      break;
+                 }
+            }
+
 
             $stmt_update = $pdo->prepare("UPDATE users SET username = ?, email = ?, role = ? WHERE id = ?");
             if ($stmt_update->execute([$username, $email, $role, $user_id_to_update])) {
@@ -155,6 +223,21 @@ try {
 
             // Consider checking if user is the only admin before deletion - important!
             // For now, simple delete.
+
+            // Check if this user is an admin and if they are the last one
+            $stmt_check_admin = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+            $stmt_check_admin->execute([$user_id_to_delete]);
+            $user_to_delete_role = $stmt_check_admin->fetchColumn();
+
+            if ($user_to_delete_role === 'admin') {
+                $stmt_count_admins = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'");
+                $admin_count = (int)$stmt_count_admins->fetchColumn();
+                if ($admin_count <= 1) {
+                    echo json_encode(['success' => false, 'message' => 'Cannot delete the last admin user.']);
+                    break;
+                }
+            }
+
             $stmt_delete = $pdo->prepare("DELETE FROM users WHERE id = ?");
             if ($stmt_delete->execute([$user_id_to_delete])) {
                 if ($stmt_delete->rowCount() > 0) {

@@ -33,7 +33,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const editorContentWrapper = noteEditorPanel ? noteEditorPanel.querySelector('.content-wrapper') : null;
     const noteTagsInput = document.getElementById('noteTagsInput');
     const currentNoteTagsDisplay = document.getElementById('currentNoteTagsDisplay');
+    const tagSuggestionsUl = document.getElementById('tagSuggestions');
     const noteLastUpdated = document.getElementById('noteLastUpdated');
+
+    // Note Editor Toolbar Buttons
+    const formatBoldBtn = document.getElementById('formatBoldBtn');
+    const formatItalicBtn = document.getElementById('formatItalicBtn');
+    const formatUnderlineBtn = document.getElementById('formatUnderlineBtn');
 
     // Share Note Modal Elements
     const shareNoteModal = document.getElementById('shareNoteModal');
@@ -47,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentNoteId = null;
     let currentNoteIsSharedWithUser = false; // Flag to indicate if the loaded note is shared with current user
     let currentNoteTags = []; // Holds array of {id, name} for the currently edited note
+    let activeFilterTags = []; // Array of tag names for current filter
     let currentUser = null;
     let allNotes = [];
     let allFolders = [];
@@ -172,10 +179,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderTagsSidebar(tags) { // Renamed from renderTags
         if (!tagListUl) return;
         tagListUl.innerHTML = ''; // Clear existing
+        if (tags.length === 0) {
+            tagListUl.innerHTML = '<li><small>No tags yet.</small></li>';
+            return;
+        }
         tags.forEach(tag => {
             const li = document.createElement('li');
-            // Note: The data-tag-id here is the tag's actual ID from the 'tags' table
-            li.innerHTML = `<a href="#" data-tag-id="${tag.id}" title="Filter by tag: ${escapeHTML(tag.name)}">#${escapeHTML(tag.name)}</a>`;
+            const countDisplay = tag.note_count > 0 ? ` (${tag.note_count})` : '';
+            li.innerHTML = `<a href="#" data-tag-id="${tag.id}" data-tag-name="${escapeHTML(tag.name)}" title="Filter by tag: ${escapeHTML(tag.name)}">#${escapeHTML(tag.name)} <span class="tag-count">${countDisplay}</span></a>`;
             tagListUl.appendChild(li);
         });
     }
@@ -593,16 +604,74 @@ document.addEventListener('DOMContentLoaded', function() {
             tagListUl.addEventListener('click', (e) => {
                 if (e.target.closest('a[data-tag-id]')) {
                     e.preventDefault();
-                    const tagId = e.target.closest('a[data-tag-id]').dataset.tagId;
-                    const tagName = e.target.closest('a[data-tag-id]').textContent.substring(1); // Remove #
+                    const tagName = e.target.closest('a[data-tag-id]').dataset.tagName; // Using data-tag-name
+                    if (!tagName) return;
 
-                    // Basic filtering:
-                    // setActiveTagListItem(tagId); // Need to implement this if we want visual feedback on active tag
-                    filterNotesByTag(tagName); // Filter by name for simplicity now
-                    console.log("Filter by tag ID:", tagId, "Name:", tagName);
+                    // Toggle tag in activeFilterTags
+                    if (activeFilterTags.includes(tagName)) {
+                        activeFilterTags = activeFilterTags.filter(t => t !== tagName);
+                        e.target.closest('a[data-tag-id]').classList.remove('active-filter');
+                    } else {
+                        activeFilterTags.push(tagName);
+                        e.target.closest('a[data-tag-id]').classList.add('active-filter');
+                    }
+
+                    filterNotesByActiveTags();
+                    updateClearTagFiltersButton();
                 }
             });
         }
+
+        const clearTagFiltersBtn = document.getElementById('clearTagFiltersBtn');
+        if (clearTagFiltersBtn) {
+            clearTagFiltersBtn.addEventListener('click', () => {
+                activeFilterTags = [];
+                document.querySelectorAll('#tagList a.active-filter').forEach(el => el.classList.remove('active-filter'));
+                filterNotesByActiveTags(); // Will show all notes as no tags are active
+                updateClearTagFiltersButton();
+                // Also ensure folder filter is reset or considered
+                const activeFolderLink = folderListUl.querySelector('a.active');
+                if (activeFolderLink && activeFolderLink.dataset.folderId !== 'all') {
+                    // If a specific folder is active, re-filter by it, otherwise all notes are shown
+                    // This part depends on desired interaction between tag and folder filters
+                } else {
+                     renderNoteList(allNotes); // If "All Notes" was active for folders
+                }
+            });
+        }
+
+        // Editor Formatting Buttons
+        if (formatBoldBtn) {
+            formatBoldBtn.addEventListener('click', () => applyMarkdownFormatting('**', '**'));
+        }
+        if (formatItalicBtn) {
+            formatItalicBtn.addEventListener('click', () => applyMarkdownFormatting('*', '*'));
+        }
+        if (formatUnderlineBtn) {
+            formatUnderlineBtn.addEventListener('click', () => applyMarkdownFormatting('__', '__'));
+        }
+        // Keyboard shortcuts for formatting
+        if (noteContentTextarea) {
+            noteContentTextarea.addEventListener('keydown', function(e) {
+                if (e.ctrlKey || e.metaKey) { // Ctrl or Cmd
+                    switch (e.key.toLowerCase()) {
+                        case 'b':
+                            e.preventDefault();
+                            applyMarkdownFormatting('**', '**');
+                            break;
+                        case 'i':
+                            e.preventDefault();
+                            applyMarkdownFormatting('*', '*');
+                            break;
+                        case 'u':
+                            e.preventDefault();
+                            applyMarkdownFormatting('__', '__');
+                            break;
+                    }
+                }
+            });
+        }
+
 
         if (noteTagsInput) {
             noteTagsInput.addEventListener('keypress', function(e) {
@@ -621,6 +690,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         noteTagsInput.value = '';
                     }
                 }
+            });
+
+            noteTagsInput.addEventListener('input', handleTagInput);
+            noteTagsInput.addEventListener('keydown', handleTagInputKeyDown);
+            noteTagsInput.addEventListener('blur', () => { // Hide suggestions when input loses focus
+                setTimeout(() => { // Timeout to allow click on suggestion
+                    if (tagSuggestionsUl) tagSuggestionsUl.style.display = 'none';
+                }, 150);
             });
         }
 
@@ -736,15 +813,149 @@ document.addEventListener('DOMContentLoaded', function() {
         setActiveNoteListItem(null);
     }
 
-    function filterNotesByTag(tagName) {
-        const lowerTagName = tagName.toLowerCase();
-        const filteredNotes = allNotes.filter(note => {
-            return note.tags && note.tags.some(tag => tag.name.toLowerCase() === lowerTagName);
-        });
-        renderNoteList(filteredNotes);
-        updateEditorState(null); // Clear editor when filtering by tag
+    function filterNotesByActiveTags() {
+        if (activeFilterTags.length === 0) {
+            renderNoteList(allNotes); // Show all notes if no filter is active
+        } else {
+            const filteredNotes = allNotes.filter(note => {
+                if (!note.tags || note.tags.length === 0) return false;
+                // Check if the note has ALL active filter tags (AND logic)
+                return activeFilterTags.every(filterTag =>
+                    note.tags.some(noteTag => noteTag.name.toLowerCase() === filterTag.toLowerCase())
+                );
+            });
+            renderNoteList(filteredNotes);
+        }
+        updateEditorState(null); // Clear editor when filtering
         setActiveNoteListItem(null);
     }
+
+    function updateClearTagFiltersButton() {
+        const clearTagFiltersBtn = document.getElementById('clearTagFiltersBtn');
+        if (clearTagFiltersBtn) {
+            clearTagFiltersBtn.style.display = activeFilterTags.length > 0 ? 'inline-block' : 'none';
+        }
+    }
+
+
+    // --- Tag Autocomplete Logic ---
+    let suggestionIdx = -1;
+
+    function applyMarkdownFormatting(prefix, suffix) {
+        if (!noteContentTextarea || noteContentTextarea.disabled) return;
+
+        const start = noteContentTextarea.selectionStart;
+        const end = noteContentTextarea.selectionEnd;
+        const selectedText = noteContentTextarea.value.substring(start, end);
+        const textBefore = noteContentTextarea.value.substring(0, start);
+        const textAfter = noteContentTextarea.value.substring(end);
+
+        // If selected text is already wrapped, unwrap it
+        // Also handle cases where the prefix/suffix might be part of a larger word if no text is selected.
+        // This simple version just toggles if the exact selection matches.
+        if (selectedText.length > 0 && selectedText.startsWith(prefix) && selectedText.endsWith(suffix)) {
+            const unwrappedText = selectedText.substring(prefix.length, selectedText.length - suffix.length);
+            noteContentTextarea.value = textBefore + unwrappedText + textAfter;
+            noteContentTextarea.selectionStart = start;
+            noteContentTextarea.selectionEnd = start + unwrappedText.length;
+        } else if (selectedText.length === 0 && textBefore.endsWith(prefix) && textAfter.startsWith(suffix)) {
+             // If no selection, and cursor is inside existing markers, remove them
+            const textBeforeUnwrapped = textBefore.substring(0, textBefore.length - prefix.length);
+            const textAfterUnwrapped = textAfter.substring(suffix.length);
+            noteContentTextarea.value = textBeforeUnwrapped + textAfterUnwrapped;
+            noteContentTextarea.selectionStart = start - prefix.length;
+            noteContentTextarea.selectionEnd = start - prefix.length;
+        }
+        else { // Wrap selected text or insert markers if no selection
+            noteContentTextarea.value = textBefore + prefix + selectedText + suffix + textAfter;
+            if (selectedText.length === 0) { // If no text was selected, place cursor in middle
+                noteContentTextarea.selectionStart = start + prefix.length;
+                noteContentTextarea.selectionEnd = start + prefix.length;
+            } else {
+                noteContentTextarea.selectionStart = start + prefix.length;
+                noteContentTextarea.selectionEnd = start + prefix.length + selectedText.length;
+            }
+        }
+        noteContentTextarea.focus();
+        // Trigger input event for any auto-saving or change detection logic if needed
+        noteContentTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function handleTagInput() {
+        if (!noteTagsInput || !tagSuggestionsUl || !allUserUniqueTags) return;
+        const inputText = noteTagsInput.value.trim().toLowerCase();
+        tagSuggestionsUl.innerHTML = '';
+        suggestionIdx = -1; // Reset keyboard navigation index
+
+        if (!inputText) {
+            tagSuggestionsUl.style.display = 'none';
+            return;
+        }
+
+        const suggestions = allUserUniqueTags.filter(tag =>
+            tag.name.toLowerCase().includes(inputText) &&
+            !currentNoteTags.some(currentTag => currentTag.name === tag.name.toLowerCase()) // Don't suggest already added tags
+        );
+
+        if (suggestions.length > 0) {
+            suggestions.slice(0, 5).forEach(tag => { // Show max 5 suggestions
+                const li = document.createElement('li');
+                li.textContent = tag.name;
+                li.addEventListener('mousedown', () => { // Mousedown to fire before blur
+                    addTagToCurrentNote(tag.name);
+                    noteTagsInput.value = '';
+                    tagSuggestionsUl.style.display = 'none';
+                });
+                tagSuggestionsUl.appendChild(li);
+            });
+            tagSuggestionsUl.style.display = 'block';
+        } else {
+            tagSuggestionsUl.style.display = 'none';
+        }
+    }
+
+    function handleTagInputKeyDown(e) {
+        if (!tagSuggestionsUl || tagSuggestionsUl.style.display === 'none') return;
+        const items = tagSuggestionsUl.querySelectorAll('li');
+        if (items.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            suggestionIdx = (suggestionIdx + 1) % items.length;
+            updateSuggestionSelection(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            suggestionIdx = (suggestionIdx - 1 + items.length) % items.length;
+            updateSuggestionSelection(items);
+        } else if (e.key === 'Enter' && suggestionIdx > -1) {
+            e.preventDefault();
+            items[suggestionIdx].dispatchEvent(new Event('mousedown')); // Trigger the mousedown event
+        } else if (e.key === 'Escape') {
+            tagSuggestionsUl.style.display = 'none';
+        }
+    }
+
+    function updateSuggestionSelection(items) {
+        items.forEach((item, index) => {
+            if (index === suggestionIdx) {
+                item.classList.add('selected');
+                item.scrollIntoView({ block: 'nearest' });
+            } else {
+                item.classList.remove('selected');
+            }
+        });
+    }
+
+    function addTagToCurrentNote(tagName) {
+        const normalizedTagName = tagName.trim().toLowerCase();
+        if (normalizedTagName && !currentNoteTags.some(t => t.name === normalizedTagName)) {
+            // Check if tag exists in allUserUniqueTags to get its ID, otherwise id is null for new tags
+            const existingGlobalTag = allUserUniqueTags.find(globalTag => globalTag.name === normalizedTagName);
+            currentNoteTags.push({ id: existingGlobalTag ? existingGlobalTag.id : null, name: normalizedTagName });
+            renderCurrentNoteTags();
+        }
+    }
+
 
     // --- Utility Functions ---
     function escapeHTML(str) {

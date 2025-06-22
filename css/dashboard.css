@@ -483,6 +483,21 @@
     color: white;
 }
 
+.tag-nav li a .tag-count {
+    color: #6c757d; /* Bootstrap secondary text color */
+    font-size: 0.9em;
+    margin-left: 4px;
+}
+.tag-nav li a.active-filter {
+    background-color: #0056b3; /* Darker blue for active filter */
+    color: white;
+    font-weight: 600;
+}
+.tag-nav li a.active-filter .tag-count {
+    color: #e0e0e0; /* Lighter count color for contrast */
+}
+
+
 .note-metadata {
     /* Styles for note-metadata are now minimal as it's part of the flex footer */
     font-size: 0.8rem;
@@ -490,6 +505,44 @@
     text-align: right;
     white-space: nowrap; /* Prevent metadata from wrapping if possible */
 }
+
+.autocomplete-wrapper {
+    position: relative; /* For absolute positioning of suggestions */
+    display: inline-block; /* Or 'flex-grow: 1' if it should expand */
+}
+
+.tag-suggestions-list {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%; /* Position below the input field */
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-top: none;
+    max-height: 150px;
+    overflow-y: auto;
+    z-index: 100; /* Ensure it's above other elements */
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.tag-suggestions-list li {
+    padding: 0.5rem 0.8rem;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.tag-suggestions-list li:hover {
+    background-color: #f0f0f0;
+}
+
+.tag-suggestions-list li.selected { /* For keyboard navigation */
+    background-color: #007bff;
+    color: white;
+}
+
 
 .note-item .shared-indicator {
     font-size: 0.75em;
