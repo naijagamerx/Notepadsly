@@ -366,6 +366,48 @@
     /* Consider 'Noteworthy' or similar for more "handwritten" feel if desired and available */
 }
 
+.note-folder-select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    margin-left: 10px; /* Spacing from title */
+    font-size: 0.9em;
+    max-width: 150px; /* Limit width */
+}
+
+
+.folder-item-actions {
+    display: inline-block; /* Changed from float: right for better control with flex */
+    margin-left: auto; /* Pushes actions to the right in a flex container */
+    opacity: 0; /* Hidden by default */
+    transition: opacity 0.2s ease-in-out;
+}
+
+.folder-nav li:hover .folder-item-actions {
+    opacity: 1; /* Show on hover */
+}
+
+.folder-item-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 0.85em;
+    color: #555;
+}
+.folder-item-actions button:hover {
+    color: #000;
+}
+
+/* Ensure folder link and actions are in a flex container for proper alignment */
+.folder-nav li a {
+    display: flex; /* Use flex to align text and actions */
+    justify-content: space-between; /* Space between name and actions */
+    align-items: center; /* Vertically align items */
+    /* ... existing styles for folder links ... */
+}
+
 
 .note-metadata {
     padding: 0.5rem 1.5rem;

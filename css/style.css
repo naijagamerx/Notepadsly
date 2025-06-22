@@ -120,3 +120,31 @@ a:hover {
     outline: 0;
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
+
+/* Global Notification Bar */
+.global-notification {
+    position: fixed;
+    top: 0; /* Or adjust if you have a fixed header it should go under/over */
+    left: 0;
+    right: 0;
+    padding: 1rem;
+    text-align: center;
+    color: #fff;
+    z-index: 1050; /* High z-index to be on top */
+    display: none; /* Hidden by default */
+    font-size: 0.95rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: top 0.3s ease-in-out; /* For slide-in/out effect if top is changed */
+}
+
+.global-notification.success {
+    background-color: #28a745; /* Green for success */
+}
+
+.global-notification.error {
+    background-color: #dc3545; /* Red for error */
+}
+
+.global-notification.info {
+    background-color: #17a2b8; /* Blue for info */
+}

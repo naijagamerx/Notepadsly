@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Notepadsly</title>
+    <link rel="stylesheet" href="../css/style.css"> <!-- General styles -->
+    <link rel="stylesheet" href="../css/admin_style.css"> <!-- Admin specific styles -->
+</head>
+<body>
+    <div id="globalNotification" class="global-notification"></div>
+    <header class="app-header">
+        <div class="logo-container">
+            <!-- <img src="../assets/logo.png" alt="Notepadsly Logo" class="app-logo"> -->
+            <h1>Notepadsly - Admin Panel</h1>
+        </div>
+        <nav class="user-nav">
+            <span id="adminUsernameDisplay">Welcome, Admin!</span>
+            <a href="../php/logout.php" class="button">Logout</a>
+            <a href="dashboard.html" class="button button-secondary" style="margin-left: 10px;">Main App</a>
+        </nav>
+    </header>
+
+    <div class="admin-container">
+        <aside class="admin-sidebar">
+            <h2>Menu</h2>
+            <nav>
+                <ul>
+                    <li><a href="#" class="active" data-section="user-management">User Management</a></li>
+                    <li><a href="#" data-section="site-settings">Site Settings</a></li>
+                    <li><a href="#" data-section="error-logs">Error Logs</a></li>
+                    <!-- More admin sections -->
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="admin-main-content">
+            <section id="user-management-section" class="admin-section">
+                <header class="section-header">
+                    <h2>User Management</h2>
+                    <button id="addUserBtn" class="button-primary">Add New User</button>
+                </header>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Created At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userListTableBody">
+                            <!-- User data will be populated here by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="site-settings-section" class="admin-section" style="display: none;">
+                <h2>Site Settings</h2>
+                <p>Site settings management will go here (logo, favicon, SMTP, etc.).</p>
+            </section>
+
+            <section id="error-logs-section" class="admin-section" style="display: none;">
+                <h2>Error Logs Viewer</h2>
+                <p>Interface to view error logs from the database will go here.</p>
+            </section>
+        </main>
+    </div>
+
+    <script src="../js/admin_dashboard.js"></script>
+</body>
+</html>

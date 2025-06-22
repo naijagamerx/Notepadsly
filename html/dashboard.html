@@ -10,6 +10,7 @@
     <!-- <link rel="icon" href="../assets/favicon.ico" type="image/x-icon"> -->
 </head>
 <body>
+    <div id="globalNotification" class="global-notification"></div>
     <header class="app-header">
         <div class="logo-container">
             <img src="../assets/logo.png" alt="Notepadsly Logo" class="app-logo">
@@ -17,7 +18,8 @@
         </div>
         <nav class="user-nav">
             <span id="usernameDisplay">Welcome, User!</span>
-            <a href="../php/logout.php" class="button">Logout</a>
+            <span id="adminLinkContainer" style="margin-left: 15px;"></span> <!-- Placeholder for Admin Link -->
+            <a href="../php/logout.php" class="button" style="margin-left: 15px;">Logout</a>
         </nav>
     </header>
 
@@ -98,10 +100,44 @@
     <!-- Modal for creating new folder -->
     <div id="newFolderModal" class="modal" style="display:none;">
         <div class="modal-content">
-            <span class="close-button">&times;</span>
+            <span class="close-button" data-modal-id="newFolderModal">&times;</span>
             <h4>Create New Folder</h4>
-            <input type="text" id="newFolderName" placeholder="Folder Name">
-            <button id="confirmNewFolderBtn">Create</button>
+            <input type="text" id="newFolderNameInput" placeholder="Folder Name">
+            <button id="confirmNewFolderBtn" class="button-primary">Create</button>
+        </div>
+    </div>
+
+    <div id="renameFolderModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-button" data-modal-id="renameFolderModal">&times;</span>
+            <h4>Rename Folder</h4>
+            <input type="text" id="renameFolderNameInput" placeholder="New Folder Name">
+            <input type="hidden" id="renameFolderIdInput">
+            <button id="confirmRenameFolderBtn" class="button-primary">Rename</button>
+        </div>
+    </div>
+
+    <div class="note-editor-panel">
+        <div class="panel-header">
+            <input type="text" id="noteTitleInput" placeholder="Note Title" value="Grocery List">
+            <select id="noteFolderSelect" class="note-folder-select">
+                <option value="">Uncategorized</option>
+                <!-- Folders will be populated here by JS -->
+            </select>
+            <div class="note-actions">
+                <button id="saveNoteBtn">Save</button>
+                <button id="deleteNoteBtn">Delete</button>
+                <button id="shareNoteBtn">Share</button>
+            </div>
+        </div>
+        <div class="toolbar">
+            <!-- Formatting buttons: Bold, Italic, List, etc. -->
+            <button>B</button> <button>I</button> <button>U</button>
+        </div>
+        <textarea id="noteContentTextarea" placeholder="Start writing your note here...">Milk, Eggs, Bread, Cheese, Apples.</textarea>
+        <div class="note-metadata">
+            <span>Last updated: Oct 25, 2023</span> |
+            <span>Tags: <a href="#">#groceries</a></span>
         </div>
     </div>
 

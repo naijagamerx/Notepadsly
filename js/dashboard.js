@@ -17,9 +17,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchNotesInput = document.getElementById('searchNotes');
 
     const newFolderModal = document.getElementById('newFolderModal');
-    const closeFolderModalBtn = newFolderModal ? newFolderModal.querySelector('.close-button') : null;
-    const newFolderNameInput = document.getElementById('newFolderName');
+    const closeNewFolderModalBtn = newFolderModal ? newFolderModal.querySelector('.close-button[data-modal-id="newFolderModal"]') : null;
+    const newFolderNameInput = document.getElementById('newFolderNameInput'); // ID updated in HTML
     const confirmNewFolderBtn = document.getElementById('confirmNewFolderBtn');
+
+    const renameFolderModal = document.getElementById('renameFolderModal');
+    const closeRenameFolderModalBtn = renameFolderModal ? renameFolderModal.querySelector('.close-button[data-modal-id="renameFolderModal"]') : null;
+    const renameFolderNameInput = document.getElementById('renameFolderNameInput');
+    const renameFolderIdInput = document.getElementById('renameFolderIdInput');
+    const confirmRenameFolderBtn = document.getElementById('confirmRenameFolderBtn');
+
+    const noteFolderSelect = document.getElementById('noteFolderSelect');
 
     const noteEditorPanel = document.querySelector('.note-editor-panel');
     const editorContentWrapper = noteEditorPanel ? noteEditorPanel.querySelector('.content-wrapper') : null;
@@ -41,18 +49,30 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function fetchUserData() {
-        // Fetches basic user info like username
-        // `php/dashboard.php` already handles authentication.
-        // We can make a call to get session-based user info if needed for display.
         fetch('../php/dashboard.php?action=get_user_info')
             .then(response => response.json())
             .then(data => {
-                if (data.username && usernameDisplay) {
+                if (data.success && data.username && usernameDisplay) {
                     usernameDisplay.textContent = `Welcome, ${data.username}!`;
                     currentUser = data; // Store user data
+
+                    // Add Admin Panel link if user is admin
+                    if (data.role === 'admin' && adminLinkContainer) {
+                        adminLinkContainer.innerHTML = `<a href="../html/admin_dashboard.html" class="button button-secondary">Admin Panel</a>`;
+                    }
+                } else if (!data.success) {
+                    // Handle cases where user info couldn't be fetched (e.g. session expired)
+                    console.error('Failed to fetch user info:', data.message);
+                    // Potentially redirect to login or show an error
+                    // For now, this might mean the dashboard operates without specific user details
+                    // or php/dashboard.php's main auth check would have already redirected.
                 }
             })
-            .catch(error => console.error('Error fetching user data:', error));
+            .catch(error => {
+                console.error('Error fetching user data:', error);
+                // Potentially redirect to login page if critical user data is missing
+                // window.location.href = '../html/index.html';
+            });
     }
 
     function loadInitialData() {
@@ -85,15 +105,55 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Rendering Functions ---
     function renderFolders(folders) {
         if (!folderListUl) return;
-        folderListUl.innerHTML = '<li><a href="#" data-folder-id="all" class="active">All Notes</a></li>'; // Default "All Notes"
+        folderListUl.innerHTML = '<li><a href="#" data-folder-id="all" class="active"><span>All Notes</span></a></li>'; // Default "All Notes"
+
+        // Populate folder dropdown in note editor
+        if (noteFolderSelect) {
+            noteFolderSelect.innerHTML = '<option value="">Uncategorized</option>'; // Default option
+            folders.forEach(folder => {
+                const option = document.createElement('option');
+                option.value = folder.id;
+                option.textContent = escapeHTML(folder.name);
+                noteFolderSelect.appendChild(option);
+            });
+        }
+
         folders.forEach(folder => {
             const li = document.createElement('li');
-            li.innerHTML = `<a href="#" data-folder-id="${folder.id}">${escapeHTML(folder.name)}</a>`;
+            li.dataset.folderId = folder.id; // For easier selection later if needed
+            li.innerHTML = `
+                <a href="#" data-folder-id="${folder.id}">
+                    <span>${escapeHTML(folder.name)}</span>
+                    <span class="folder-item-actions">
+                        <button class="edit-folder-btn" title="Rename folder">&#9998;</button> <!-- Pencil icon -->
+                        <button class="delete-folder-btn" title="Delete folder">&times;</button> <!-- Cross icon -->
+                    </span>
+                </a>`;
+
+            const editBtn = li.querySelector('.edit-folder-btn');
+            const deleteBtn = li.querySelector('.delete-folder-btn');
+
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent folder navigation
+                e.preventDefault();
+                openRenameFolderModal(folder.id, folder.name);
+            });
+
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                confirmDeleteFolder(folder.id, folder.name);
+            });
+
             folderListUl.appendChild(li);
         });
-        // Add active class to "All Notes" by default
-        folderListUl.querySelector('a[data-folder-id="all"]').classList.add('active');
 
+        const activeFolderLink = folderListUl.querySelector('a.active');
+        if (!activeFolderLink && folderListUl.querySelector('a[data-folder-id="all"]')) {
+             folderListUl.querySelector('a[data-folder-id="all"]').classList.add('active');
+        } else if (activeFolderLink) { // Ensure the active class is on the 'a' tag
+            setActiveFolderListItem(activeFolderLink.dataset.folderId);
+        }
     }
 
     function renderTags(tags) {
@@ -167,18 +227,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         currentNoteId = noteId;
                     } else {
                         console.error("Failed to load note content:", result.message);
-                        alert("Error loading note.");
+                        showGlobalNotification(result.message || "Error loading note.", 'error');
                         updateEditorState(null);
                     }
                 })
                 .catch(err => {
                     console.error("Error fetching note content:", err);
-                    alert("Error loading note.");
+                    showGlobalNotification("Error loading note.", 'error');
                     updateEditorState(null);
                 });
         } else {
+            // This case might not need a user notification if it's an internal state issue
             console.warn(`Note with ID ${noteId} not found in local cache.`);
-            // Potentially fetch it if not found, or handle error
             updateEditorState(null);
         }
     }
@@ -193,6 +253,9 @@ document.addEventListener('DOMContentLoaded', function() {
             noteTitleInput.value = noteData.title || '';
             noteContentTextarea.value = noteData.content || '';
             currentNoteId = noteData.id;
+            if (noteFolderSelect) {
+                noteFolderSelect.value = noteData.folder_id || ""; // Set folder dropdown
+            }
             // Update metadata (tags, last updated) if available in noteData
             // const metadataDisplay = document.querySelector('.note-metadata span');
             // if (metadataDisplay) metadataDisplay.textContent = `Last updated: ${new Date(noteData.updated_at).toLocaleString()}`;
@@ -202,6 +265,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             noteTitleInput.value = '';
             noteContentTextarea.value = '';
+            if (noteFolderSelect) noteFolderSelect.value = ""; // Reset folder dropdown
             currentNoteId = null;
             // Clear metadata
             // const metadataDisplay = document.querySelector('.note-metadata span');
@@ -211,19 +275,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     function saveCurrentNote() {
-        if (!noteTitleInput || !noteContentTextarea) return;
+        if (!noteTitleInput || !noteContentTextarea || !noteFolderSelect) return;
 
         const title = noteTitleInput.value.trim();
         const content = noteContentTextarea.value;
-        let url, body;
+        const folderId = noteFolderSelect.value;
+        let url;
 
         const formData = new FormData();
         formData.append('title', title);
         formData.append('content', content);
-        // folder_id should be handled if notes are tied to folders on creation/saving
+        if (folderId) {
+            formData.append('folder_id', folderId);
+        }
 
         if (currentNoteId) { // Update existing note
-            url = `../php/dashboard.php?action=update_note&id=${currentNoteId}`;
+            // url = `../php/dashboard.php?action=update_note&id=${currentNoteId}`; // ID in GET is not how PHP is structured
+            url = `../php/dashboard.php?action=update_note`; // PHP expects note_id in POST
             formData.append('note_id', currentNoteId);
         } else { // Create new note
             url = '../php/dashboard.php?action=create_note';
@@ -233,50 +301,59 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    alert(result.message || 'Note saved!');
-                    // Refresh note list and potentially select the saved/new note
-                    loadInitialData(); // Reload all data for simplicity, could be more targeted
-                    if (result.note_id) { // If new note was created
+                    showGlobalNotification(result.message || 'Note saved!', 'success');
+                    loadInitialData();
+                    if (result.note_id) {
                         currentNoteId = result.note_id;
-                        // setTimeout(() => { // Allow list to re-render
-                        //     loadNoteIntoEditor(currentNoteId);
-                        //     setActiveNoteListItem(currentNoteId);
-                        // }, 200);
+                         // Optionally, automatically select the new/updated note
+                        setTimeout(() => {
+                            setActiveNoteListItem(currentNoteId);
+                            loadNoteIntoEditor(currentNoteId); // This will also set the folder dropdown
+                        }, 100); // Small delay for list to re-render
+                    } else if (currentNoteId) {
+                        // If updating, re-select and load to reflect changes
+                         setTimeout(() => {
+                            setActiveNoteListItem(currentNoteId);
+                            loadNoteIntoEditor(currentNoteId);
+                        }, 100);
                     }
                 } else {
-                    alert(result.message || 'Failed to save note.');
+                    showGlobalNotification(result.message || 'Failed to save note.', 'error');
                 }
             })
             .catch(error => {
                 console.error('Error saving note:', error);
-                alert('An error occurred while saving the note.');
+                showGlobalNotification('An error occurred while saving the note.', 'error');
             });
     }
 
     function deleteCurrentNote() {
         if (!currentNoteId) {
-            alert("No note selected to delete.");
+            showGlobalNotification("No note selected to delete.", "info");
             return;
         }
-        if (!confirm(`Are you sure you want to delete the note "${noteTitleInput.value}"?`)) {
+        // Using confirm is okay for destructive actions, but a custom modal could be used for consistency.
+        if (!confirm(`Are you sure you want to delete the note "${escapeHTML(noteTitleInput.value)}"?`)) {
             return;
         }
+        const formData = new FormData();
+        formData.append('id', currentNoteId);
 
-        fetch(`../php/dashboard.php?action=delete_note&id=${currentNoteId}`, { method: 'POST' }) // POST or DELETE
+        fetch(`../php/dashboard.php?action=delete_note`, { method: 'POST', body: formData })
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    alert('Note deleted successfully!');
+                    showGlobalNotification('Note deleted successfully!', 'success');
                     currentNoteId = null;
-                    updateEditorState(null); // Clear editor
-                    loadInitialData(); // Refresh list
+                    updateEditorState(null);
+                    loadInitialData();
                 } else {
-                    alert(result.message || 'Failed to delete note.');
+                    showGlobalNotification(result.message || 'Failed to delete note.', 'error');
                 }
             })
             .catch(error => {
                 console.error('Error deleting note:', error);
-                alert('An error occurred while deleting the note.');
+                showGlobalNotification('An error occurred while deleting the note.', 'error');
             });
     }
 
@@ -297,34 +374,69 @@ document.addEventListener('DOMContentLoaded', function() {
             deleteNoteBtn.addEventListener('click', deleteCurrentNote);
         }
 
-        if (newFolderBtn && newFolderModal && closeFolderModalBtn && confirmNewFolderBtn && newFolderNameInput) {
+        // New Folder Modal listeners
+        if (newFolderBtn && newFolderModal && closeNewFolderModalBtn && confirmNewFolderBtn && newFolderNameInput) {
             newFolderBtn.addEventListener('click', () => {
-                newFolderModal.style.display = 'flex';
                 newFolderNameInput.value = '';
+                newFolderModal.style.display = 'flex';
                 newFolderNameInput.focus();
             });
-            closeFolderModalBtn.addEventListener('click', () => {
+            closeNewFolderModalBtn.addEventListener('click', () => {
                 newFolderModal.style.display = 'none';
             });
             confirmNewFolderBtn.addEventListener('click', () => {
                 const folderName = newFolderNameInput.value.trim();
                 if (folderName) {
                     createFolder(folderName);
-                    newFolderModal.style.display = 'none';
                 } else {
-                    alert("Folder name cannot be empty.");
-                }
-            });
-            window.addEventListener('click', (event) => { // Close modal if clicked outside
-                if (event.target == newFolderModal) {
-                    newFolderModal.style.display = 'none';
+                    showGlobalNotification("Folder name cannot be empty.", "error");
                 }
             });
         }
 
+        // Rename Folder Modal listeners
+        if (renameFolderModal && closeRenameFolderModalBtn && confirmRenameFolderBtn && renameFolderNameInput) {
+            closeRenameFolderModalBtn.addEventListener('click', () => {
+                renameFolderModal.style.display = 'none';
+            });
+            confirmRenameFolderBtn.addEventListener('click', () => {
+                const newName = renameFolderNameInput.value.trim();
+                const folderId = renameFolderIdInput.value;
+                if (newName && folderId) {
+                    renameFolder(folderId, newName);
+                } else {
+                    showGlobalNotification("Folder name cannot be empty.", "error");
+                }
+            });
+        }
+
+        // Generic modal closing by clicking outside
+        [newFolderModal, renameFolderModal].forEach(modal => {
+            if (modal) {
+                window.addEventListener('click', (event) => {
+                    if (event.target == modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            }
+        });
+
         if (folderListUl) {
             folderListUl.addEventListener('click', (e) => {
-                if (e.target.tagName === 'A' && e.target.dataset.folderId) {
+                // Navigate if 'A' or 'SPAN' inside 'A' is clicked, but not buttons inside 'A'
+                const anchor = e.target.closest('a[data-folder-id]');
+                if (anchor && !e.target.closest('button')) {
+                    e.preventDefault();
+                    const folderId = anchor.dataset.folderId;
+                    setActiveFolderListItem(folderId);
+                    filterNotesByFolder(folderId);
+                }
+            });
+        }
+
+        if (tagListUl) {
+            tagListUl.addEventListener('click', (e) => {
+                if (e.target.tagName === 'A' && e.target.dataset.tagId) {
                     e.preventDefault();
                     const folderId = e.target.dataset.folderId;
                     setActiveFolderListItem(folderId);
@@ -361,15 +473,72 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    alert("Folder created!");
+                    // alert("Folder created!"); // Or use a less intrusive notification
+                    if (newFolderModal) newFolderModal.style.display = 'none';
                     loadInitialData(); // Refresh folder list (and other data)
                 } else {
-                    alert(result.message || "Failed to create folder.");
+                    showGlobalNotification(result.message || "Failed to create folder.", 'error');
                 }
             })
             .catch(error => {
                 console.error('Error creating folder:', error);
-                alert("An error occurred while creating the folder.");
+                showGlobalNotification("An error occurred while creating the folder.", 'error');
+            });
+    }
+
+    function openRenameFolderModal(folderId, currentName) {
+        if (renameFolderModal && renameFolderNameInput && renameFolderIdInput) {
+            renameFolderNameInput.value = currentName;
+            renameFolderIdInput.value = folderId;
+            renameFolderModal.style.display = 'flex';
+            renameFolderNameInput.focus();
+        }
+    }
+
+    function renameFolder(folderId, newName) {
+        const formData = new FormData();
+        formData.append('folder_id', folderId);
+        formData.append('name', newName);
+
+        fetch('../php/dashboard.php?action=update_folder', { method: 'POST', body: formData})
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    if (renameFolderModal) renameFolderModal.style.display = 'none';
+                    loadInitialData(); // Refresh data
+                } else {
+                    showGlobalNotification(result.message || "Failed to rename folder.", 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error renaming folder:', error);
+                showGlobalNotification("An error occurred while renaming the folder.", 'error');
+            });
+    }
+
+    function confirmDeleteFolder(folderId, folderName) {
+        if (confirm(`Are you sure you want to delete the folder "${escapeHTML(folderName)}"? Notes in this folder will be moved to "All Notes".`)) {
+            deleteFolder(folderId);
+        }
+    }
+
+    function deleteFolder(folderId) {
+        const formData = new FormData();
+        formData.append('folder_id', folderId);
+
+        fetch('../php/dashboard.php?action=delete_folder', { method: 'POST', body: formData})
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showGlobalNotification(result.message || 'Folder deleted successfully!', 'success');
+                    loadInitialData(); // Refresh data
+                } else {
+                    showGlobalNotification(result.message || "Failed to delete folder.", 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting folder:', error);
+                showGlobalNotification("An error occurred while deleting the folder.", 'error');
             });
     }
 
@@ -381,14 +550,9 @@ document.addEventListener('DOMContentLoaded', function() {
             notesToDisplay = allNotes.filter(note => note.folder_id == folderId);
         }
         renderNoteList(notesToDisplay);
-        if (notesToDisplay.length > 0) {
-            // loadNoteIntoEditor(notesToDisplay[0].id);
-            // setActiveNoteListItem(notesToDisplay[0].id);
-            updateEditorState(null); // Clear editor when changing folders for now
-            setActiveNoteListItem(null);
-        } else {
-            updateEditorState(null); // No notes in this folder
-        }
+
+        updateEditorState(null); // Clear editor when changing folders
+        setActiveNoteListItem(null); // Deselect any active note in list
     }
 
     function filterNotesBySearch(searchTerm) {
@@ -423,6 +587,35 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Start the application ---
     initializeDashboard();
 });
+
+// --- Global Notification Function ---
+let notificationTimeout;
+function showGlobalNotification(message, type = 'info', duration = 3000) {
+    const notificationElement = document.getElementById('globalNotification');
+    if (!notificationElement) return;
+
+    clearTimeout(notificationTimeout); // Clear existing timeout
+
+    notificationElement.textContent = message;
+    notificationElement.className = 'global-notification'; // Reset classes
+    notificationElement.classList.add(type); // 'success', 'error', or 'info'
+
+    // Adjust top if fixed header exists (like .app-header)
+    const header = document.querySelector('.app-header');
+    if (header && getComputedStyle(header).position === 'fixed') {
+        notificationElement.style.top = `${header.offsetHeight}px`;
+    } else {
+        notificationElement.style.top = '0px';
+    }
+
+    notificationElement.style.display = 'block';
+
+    notificationTimeout = setTimeout(() => {
+        notificationElement.style.display = 'none';
+        notificationElement.style.top = '0px'; // Reset top for next time
+    }, duration);
+}
+
 
 // Add to php/dashboard.php for new actions:
 // get_note_content, update_note, delete_note, create_folder, (get_tags - if not in initial)
