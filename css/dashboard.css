@@ -592,33 +592,65 @@
     background-color: #f1b0b7;
 }
 
+.offline-toggle-container {
+    display: flex;
+    align-items: center;
+    margin-right: 20px; /* Space from username */
+}
+.offline-toggle-container label {
+    font-size: 0.85em;
+    color: #555;
+    margin-right: 5px;
+    cursor: pointer;
+}
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 34px; /* Width of the switch */
+    height: 20px; /* Height of the switch */
+    cursor: pointer;
+}
+.toggle-switch input { display:none; } /* Hide default checkbox */
+
+/* Add styles for a custom toggle switch appearance if desired, or use browser default */
+/* For now, browser default checkbox will be used. Custom styling is more involved. */
+
 
 /* App Footer (for mobile menu) */
-.app-footer {
-    display: none; /* Hidden by default, shown in mobile */
-    background-color: #f8f8f8;
-    color: #333;
-    text-align: center;
-    padding: 0.5rem 0;
-    font-size: 0.85rem;
+.mobile-footer-menu { /* Use a more specific class if .app-footer is for desktop copyright */
+    display: none; /* Hidden by default, shown in mobile via @media query */
+    background-color: #f9f9f9; /* Match toolbar */
+    border-top: 1px solid #e0e0e0;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     z-index: 1000;
-    border-top: 1px solid #d0d0d0;
-    height: 50px;
-    align-items: center;
+    height: 55px; /* Slightly taller for touch */
+    align-items: stretch; /* Stretch items to fill height */
     justify-content: space-around;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
 }
-.app-footer .footer-icon {
-    font-size: 1.6rem; /* Example size for icons */
+.mobile-footer-menu .footer-icon {
+    background: none;
+    border: none;
+    font-size: 1.5rem; /* Adjust for better icon rendering */
     color: #555;
     cursor: pointer;
-    padding: 0.3rem 0.8rem;
+    padding: 0.5rem; /* More padding */
+    flex-grow: 1; /* Distribute space equally */
+    display: flex;
+    flex-direction: column; /* If adding text below icon */
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease, background-color 0.2s ease;
 }
-.app-footer .footer-icon.active {
+.mobile-footer-menu .footer-icon:hover {
+    background-color: #e9e9e9;
+}
+.mobile-footer-menu .footer-icon.active {
     color: #007bff; /* Active icon color */
+    background-color: #e0e0e0;
 }
 
 
@@ -764,9 +796,45 @@
     .mobile-view-editor .sidebar.open { left: -260px; } /* Close sidebar if editor opens */
 
 
-    .app-footer {
+    .mobile-footer-menu { /* Renamed from .app-footer for this context */
         display: flex; /* Show footer menu on mobile */
     }
+    .app-container { /* Adjust app container for fixed footer */
+        margin-bottom: 55px; /* Height of the mobile footer menu */
+        height: calc(100vh - 60px - 55px); /* Header and footer menu */
+    }
+
+    /* Default mobile view: Show note list, hide editor and sidebar */
+    .main-content {
+        /* flex-direction: column; /* Already set */
+    }
+    .sidebar {
+        /* Keep existing mobile sidebar styles (hidden off-screen, toggled by JS) */
+        /* position: absolute; left: -260px; ... */
+    }
+    .note-editor-panel {
+        /* display: none; /* Hide editor by default on mobile */
+        /* This will be controlled by JS adding a class like 'mobile-active-panel' */
+    }
+    .note-list-panel {
+        /* display: flex; /* Show list by default */
+        /* This will also be controlled by JS */
+    }
+
+    /* Define which panel is visible */
+    .mobile-view-list .note-list-panel { display: flex; }
+    .mobile-view-list .note-editor-panel { display: none; }
+    .mobile-view-list .sidebar { left: -260px; /* Ensure sidebar is closed */ }
+
+    .mobile-view-editor .note-list-panel { display: none; }
+    .mobile-view-editor .note-editor-panel { display: flex; }
+    .mobile-view-editor .sidebar { left: -260px; /* Ensure sidebar is closed */ }
+
+    .mobile-view-sidebar .sidebar { left: 0; }
+    /* When sidebar is open, we might want to hide both note list and editor, or show list under it */
+    .mobile-view-sidebar .note-list-panel { display: none; } /* Example: hide list when sidebar open */
+    .mobile-view-sidebar .note-editor-panel { display: none; } /* Example: hide editor too */
+
 
     #noteContentTextarea {
         background-image: linear-gradient(to bottom, transparent calc(1.6em - 1px), #e8e8e8 1.6em);

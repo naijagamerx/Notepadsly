@@ -17,6 +17,11 @@
             <h1>Notepadsly</h1>
         </div>
         <nav class="user-nav">
+            <div class="offline-toggle-container">
+                <label for="workOfflineToggle" title="Save/load current note locally. Does not sync all notes.">Work Offline:</label>
+                <input type="checkbox" id="workOfflineToggle" class="toggle-switch">
+                <span id="offlineModeIndicator" style="display:none; color: orange; margin-left: 5px;">(Offline)</span>
+            </div>
             <span id="usernameDisplay">Welcome, User!</span>
             <span id="adminLinkContainer" style="margin-left: 15px;"></span> <!-- Placeholder for Admin Link -->
             <a href="../php/logout.php" class="button" style="margin-left: 15px;">Logout</a>
@@ -96,6 +101,14 @@
         <p>&copy; <span id="currentYear"></span> Notepadsly. All rights reserved.</p>
         <!-- Mobile navigation icons could go here -->
     </footer>
+
+    <!-- Mobile Footer Menu -->
+    <nav class="mobile-footer-menu app-footer"> <!-- Re-using app-footer for now, can be a new class -->
+        <button id="mobileNewNoteBtn" class="footer-icon" title="New Note">&#xFF0B;</button> <!-- Plus Icon -->
+        <button id="mobileToggleSidebarBtn" class="footer-icon" title="Toggle Folders/Tags">&#128193;</button> <!-- Folder Icon -->
+        <button id="mobileSearchBtn" class="footer-icon" title="Search Notes">&#128269;</button> <!-- Magnifying Glass -->
+        <button id="mobileUserBtn" class="footer-icon" title="User/Settings">&#128100;</button> <!-- User Icon -->
+    </nav>
 
     <!-- Modal for creating new folder -->
     <div id="newFolderModal" class="modal" style="display:none;">

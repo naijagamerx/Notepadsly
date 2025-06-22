@@ -285,7 +285,39 @@ if (isset($_GET['action']) && $_GET['action'] === 'share_note' && $_SERVER['REQU
         // 5. Insert into shared_notes
         $stmt_insert_share = $pdo->prepare("INSERT INTO shared_notes (note_id, shared_with_user_id, shared_by_user_id, permission) VALUES (?, ?, ?, ?)");
         if ($stmt_insert_share->execute([$note_id_to_share, $target_user_id, $user_id, $permission])) {
-            echo json_encode(['success' => true, 'message' => 'Note shared successfully with read-only permission.']);
+            // --- Conceptual Email Notification ---
+            // 1. Get recipient's email
+            $stmt_recipient_email = $pdo->prepare("SELECT email FROM users WHERE id = ?");
+            $stmt_recipient_email->execute([$target_user_id]);
+            $recipient_email = $stmt_recipient_email->fetchColumn();
+
+            // 2. Get note title
+            $stmt_note_title = $pdo->prepare("SELECT title FROM notes WHERE id = ?");
+            $stmt_note_title->execute([$note_id_to_share]);
+            $note_title = $stmt_note_title->fetchColumn();
+
+            // 3. Get sharer's username (already in $username from session at top of script)
+            $sharer_username = $_SESSION['username'];
+
+            // 4. Fetch conceptual SMTP settings (to show intent)
+            $smtp_settings_to_log = [];
+            $stmt_admin_settings = $pdo->query("SELECT setting_key, setting_value FROM admin_settings WHERE setting_key LIKE 'smtp_%'");
+            $smtp_config = $stmt_admin_settings->fetchAll(PDO::FETCH_KEY_PAIR);
+            $smtp_host_log = $smtp_config['smtp_host'] ?? 'not_configured';
+
+            // 5. Log the conceptual email
+            $email_log_message = sprintf(
+                "CONCEPTUAL EMAIL: To: %s | Subject: Note '%s' shared with you by %s | Body: %s shared the note '%s' with you on Notepadsly. | SMTP Host (Conceptual): %s",
+                $recipient_email,
+                $note_title,
+                $sharer_username,
+                $sharer_username,
+                $note_title,
+                $smtp_host_log
+            );
+            log_error($email_log_message, __FILE__, __LINE__); // Using existing log_error function
+
+            echo json_encode(['success' => true, 'message' => 'Note shared successfully with read-only permission. Notification logged.']);
         } else {
             log_error("Failed to share note ID $note_id_to_share with user ID $target_user_id", __FILE__, __LINE__);
             echo json_encode(['success' => false, 'message' => 'Failed to share note due to a server error.']);
