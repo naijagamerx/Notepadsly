@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Notepadsly</title>
+    <link rel="stylesheet" href="../css/style.css"> <!-- General styles -->
+    <link rel="stylesheet" href="../css/dashboard.css"> <!-- Dashboard specific styles -->
+    <!-- Favicon (to be added later in assets) -->
+    <!-- <link rel="icon" href="../assets/favicon.ico" type="image/x-icon"> -->
+</head>
+<body>
+    <header class="app-header">
+        <div class="logo-container">
+            <img src="../assets/logo.png" alt="Notepadsly Logo" class="app-logo">
+            <h1>Notepadsly</h1>
+        </div>
+        <nav class="user-nav">
+            <span id="usernameDisplay">Welcome, User!</span>
+            <a href="../php/logout.php" class="button">Logout</a>
+        </nav>
+    </header>
+
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <button id="newNoteBtn" class="button-primary">New Note</button>
+            </div>
+            <nav class="folder-nav">
+                <h3>Folders</h3>
+                <ul id="folderList">
+                    <!-- Folders will be dynamically populated here -->
+                    <li><a href="#" data-folder-id="all">All Notes</a></li>
+                    <li><a href="#" data-folder-id="1">Personal</a></li>
+                    <li><a href="#" data-folder-id="2">Work</a></li>
+                </ul>
+                <button id="newFolderBtn">New Folder</button>
+            </nav>
+            <nav class="tag-nav">
+                <h3>Tags</h3>
+                <ul id="tagList">
+                    <!-- Tags will be dynamically populated here -->
+                    <li><a href="#" data-tag-id="important">#important</a></li>
+                    <li><a href="#" data-tag-id="ideas">#ideas</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="note-list-panel">
+                <div class="panel-header">
+                    <h3>Notes</h3>
+                    <input type="search" id="searchNotes" placeholder="Search notes...">
+                </div>
+                <ul id="noteList">
+                    <!-- Notes will be dynamically populated here -->
+                    <li class="note-item" data-note-id="1">
+                        <h4>Meeting Notes</h4>
+                        <p>Discuss project updates...</p>
+                        <small>Oct 26, 2023</small>
+                    </li>
+                    <li class="note-item active" data-note-id="2">
+                        <h4>Grocery List</h4>
+                        <p>Milk, Eggs, Bread...</p>
+                        <small>Oct 25, 2023</small>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="note-editor-panel">
+                <div class="panel-header">
+                    <input type="text" id="noteTitle" placeholder="Note Title" value="Grocery List">
+                    <div class="note-actions">
+                        <button id="saveNoteBtn">Save</button>
+                        <button id="deleteNoteBtn">Delete</button>
+                        <button id="shareNoteBtn">Share</button>
+                        <!-- More actions: download, barcode etc. -->
+                    </div>
+                </div>
+                <div class="toolbar">
+                    <!-- Formatting buttons: Bold, Italic, List, etc. -->
+                    <button>B</button> <button>I</button> <button>U</button>
+                </div>
+                <textarea id="noteContent" placeholder="Start writing your note here...">Milk, Eggs, Bread, Cheese, Apples.</textarea>
+                <div class="note-metadata">
+                    <span>Last updated: Oct 25, 2023</span> |
+                    <span>Tags: <a href="#">#groceries</a></span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <footer class="app-footer">
+        <p>&copy; <span id="currentYear"></span> Notepadsly. All rights reserved.</p>
+        <!-- Mobile navigation icons could go here -->
+    </footer>
+
+    <!-- Modal for creating new folder -->
+    <div id="newFolderModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h4>Create New Folder</h4>
+            <input type="text" id="newFolderName" placeholder="Folder Name">
+            <button id="confirmNewFolderBtn">Create</button>
+        </div>
+    </div>
+
+    <!-- Basic JS for interactivity, actual data will come from php/dashboard.php -->
+    <script src="../js/dashboard.js"></script>
+</body>
+</html>

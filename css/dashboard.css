@@ -1,0 +1,574 @@
+/* Dashboard specific styles */
+
+/* App Header */
+.app-header {
+    background-color: #ffffff; /* White header */
+    padding: 0.8rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: fixed; /* Stick to top */
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    height: 60px; /* Fixed height */
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+}
+
+.app-logo {
+    height: 35px; /* Adjust as needed */
+    margin-right: 0.75rem;
+    /* Temporary background color for visibility if image is missing */
+    /* background-color: #ddd; */
+}
+
+.app-header h1 {
+    font-size: 1.5rem;
+    margin: 0;
+    color: #333;
+    font-weight: 600; /* Corresponds to iOS Notes app title weight */
+}
+
+.user-nav {
+    display: flex;
+    align-items: center;
+}
+
+.user-nav #usernameDisplay {
+    margin-right: 1rem;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.user-nav .button { /* Style for logout button */
+    background-color: #007bff;
+    color: white;
+    padding: 0.5rem 1rem;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 0.9rem;
+}
+.user-nav .button:hover {
+    background-color: #0056b3;
+}
+
+
+/* App Container: Holds Sidebar and Main Content */
+.app-container {
+    display: flex;
+    margin-top: 60px; /* Height of the fixed header */
+    height: calc(100vh - 60px); /* Full viewport height minus header */
+    background-color: #f8f8f8; /* Light background for the app area */
+}
+
+/* Sidebar */
+.sidebar {
+    width: 250px; /* Fixed width for sidebar */
+    min-width: 220px; /* Minimum width */
+    background-color: #f0f0f0; /* Slightly darker than app background, iOS like */
+    padding: 1rem;
+    border-right: 1px solid #e0e0e0;
+    overflow-y: auto; /* Scroll if content overflows */
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    margin-bottom: 1rem;
+}
+
+.sidebar-header #newNoteBtn {
+    width: 100%;
+    padding: 0.8rem;
+    font-size: 1rem;
+    background-color: #ffcc00; /* iOS yellow for primary action */
+    color: #333;
+    border: none;
+    border-radius: 5px;
+    font-weight: 500;
+}
+.sidebar-header #newNoteBtn:hover {
+    background-color: #e6b800;
+}
+
+
+.folder-nav h3, .tag-nav h3 {
+    font-size: 0.85rem; /* Smaller headings for sections */
+    color: #555; /* Darker grey for better readability */
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    padding-left: 0.5rem;
+    text-transform: uppercase;
+    font-weight: 600; /* Slightly bolder */
+}
+
+.folder-nav ul, .tag-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.folder-nav li a, .tag-nav li a {
+    display: block;
+    padding: 0.6rem 0.8rem;
+    color: #333;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folder-nav li a:hover, .tag-nav li a:hover,
+.folder-nav li.active a, .tag-nav li.active a { /* Target 'a' inside active 'li' */
+    background-color: #e0e0e0; /* Highlight for active/hover */
+    font-weight: 500;
+}
+.folder-nav li.active a { /* More specific for active folder */
+     background-color: #ffdd40; /* Lighter iOS yellow for selected folder */
+     color: #000;
+     font-weight: 600;
+}
+
+
+#newFolderBtn {
+    margin-top: 0.8rem;
+    width: 100%;
+    padding: 0.5rem;
+    background-color: transparent;
+    border: 1px dashed #aaa;
+    color: #555;
+    font-size: 0.9rem;
+    border-radius: 4px;
+}
+#newFolderBtn:hover {
+    background-color: #e9e9e9;
+    border-color: #888;
+}
+
+
+/* Main Content Area */
+.main-content {
+    flex-grow: 1; /* Takes remaining space */
+    display: flex; /* Layout for note list and editor */
+    overflow: hidden; /* Prevent app container from scrolling due to this flex container */
+}
+
+/* Note List Panel */
+.note-list-panel {
+    width: 320px; /* Width of the notes list */
+    min-width: 280px;
+    border-right: 1px solid #d0d0d0; /* Separator line like iOS */
+    display: flex;
+    flex-direction: column;
+    background-color: #fdfdfd; /* Slightly off-white */
+}
+
+.note-list-panel .panel-header {
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 40px; /* Ensure consistent height */
+    flex-shrink: 0; /* Prevent header from shrinking */
+}
+
+.note-list-panel .panel-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #333;
+    font-weight: 600;
+}
+#searchNotes {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 20px; /* Pill shape search */
+    font-size: 0.9rem;
+    width: 150px; /* Adjust as needed */
+}
+
+
+#noteList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto; /* Scrollable list of notes */
+    flex-grow: 1;
+}
+
+.note-item {
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid #e8e8e8;
+    cursor: pointer;
+}
+.note-item:last-child {
+    border-bottom: none;
+}
+
+.note-item:hover {
+    background-color: #f5f5f5; /* Lighter hover */
+}
+
+.note-item.active {
+    background-color: #fff9e0; /* Softer light yellow for active note */
+    border-left: 3px solid #ffd700; /* Gold/yellow accent */
+    padding-left: calc(1rem - 3px); /* Adjust padding for border */
+}
+.note-item.active h4 {
+    font-weight: 600;
+}
+
+.note-item h4 { /* Note title in list */
+    margin: 0 0 0.25rem 0;
+    font-size: 0.95rem; /* Slightly smaller */
+    font-weight: 500;
+    color: #222;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.note-item p { /* Snippet */
+    margin: 0 0 0.25rem 0;
+    font-size: 0.8rem; /* Smaller snippet */
+    color: #555;
+    line-height: 1.3;
+    height: 2.6em; /* Approx 2 lines */
+    overflow: hidden;
+    text-overflow: ellipsis; /* Add ellipsis if snippet overflows */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.note-item small { /* Date */
+    font-size: 0.75rem;
+    color: #777;
+}
+
+/* Note Editor Panel */
+.note-editor-panel {
+    flex-grow: 1; /* Takes remaining space */
+    display: flex;
+    flex-direction: column;
+    background-color: #fffef7; /* Very light yellow, iOS note paper color */
+    padding: 0;
+    position: relative;
+}
+.note-editor-panel.empty { /* Style when no note is selected */
+    align-items: center;
+    justify-content: center;
+    color: #888;
+    font-size: 1.2rem;
+}
+.note-editor-panel.empty .content-wrapper { display: none; } /* Hide normal content */
+
+
+.note-editor-panel .content-wrapper { /* Add a wrapper for when a note IS selected */
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+
+.note-editor-panel .panel-header {
+    padding: 0.8rem 1.5rem;
+    border-bottom: 1px solid #e0e0e0; /* Subtle separator */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #fdfdfd; /* Header of editor can be slightly off-white */
+    min-height: 40px;
+    flex-shrink: 0; /* Prevent header from shrinking */
+}
+
+#noteTitleInput { /* Renamed from noteTitle for clarity */
+    flex-grow: 1;
+    border: none;
+    font-size: 1.3rem; /* Slightly smaller than before */
+    font-weight: 600;
+    padding: 0.5rem 0;
+    outline: none;
+    background-color: transparent;
+    color: #111;
+}
+
+.note-actions button {
+    margin-left: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.note-actions button:hover {
+    background-color: #e0e0e0;
+}
+.note-actions #saveNoteBtn {
+    background-color: #28a745; /* Green for save */
+    color: white;
+    border-color: #28a745;
+}
+.note-actions #saveNoteBtn:hover {
+    background-color: #218838;
+}
+.note-actions #deleteNoteBtn {
+    background-color: #dc3545; /* Red for delete */
+    color: white;
+    border-color: #dc3545;
+}
+.note-actions #deleteNoteBtn:hover {
+    background-color: #c82333;
+}
+
+
+.toolbar {
+    padding: 0.5rem 1.5rem;
+    background-color: #f9f9f9; /* Light grey for toolbar */
+    border-bottom: 1px solid #e0e0e0;
+    flex-shrink: 0; /* Prevent toolbar from shrinking */
+}
+
+.toolbar button {
+    margin-right: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+}
+.toolbar button:hover {
+    background-color: #eee;
+}
+
+#noteContentTextarea { /* Renamed for clarity */
+    flex-grow: 1;
+    padding: 1.5rem;
+    border: none;
+    outline: none;
+    font-size: 1rem;
+    line-height: 1.7; /* iOS Notes has generous line height */
+    background-color: transparent;
+    resize: none;
+    /* Simulating lines in a notepad */
+    background-image: linear-gradient(to bottom, transparent calc(1.7em - 1px), #e0e0e0 1.7em);
+    background-size: 100% 1.7em; /* Match line-height */
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; /* More standard sans-serif */
+    /* Consider 'Noteworthy' or similar for more "handwritten" feel if desired and available */
+}
+
+
+.note-metadata {
+    padding: 0.5rem 1.5rem;
+    font-size: 0.8rem;
+    color: #777;
+    border-top: 1px solid #e0e0e0;
+    background-color: #f9f9f9; /* Footer of editor can match toolbar */
+    text-align: right;
+    flex-shrink: 0; /* Prevent footer from shrinking */
+}
+
+
+/* App Footer (for mobile menu) */
+.app-footer {
+    display: none; /* Hidden by default, shown in mobile */
+    background-color: #f8f8f8;
+    color: #333;
+    text-align: center;
+    padding: 0.5rem 0;
+    font-size: 0.85rem;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    border-top: 1px solid #d0d0d0;
+    height: 50px;
+    align-items: center;
+    justify-content: space-around;
+}
+.app-footer .footer-icon {
+    font-size: 1.6rem; /* Example size for icons */
+    color: #555;
+    cursor: pointer;
+    padding: 0.3rem 0.8rem;
+}
+.app-footer .footer-icon.active {
+    color: #007bff; /* Active icon color */
+}
+
+
+/* Modal Styling */
+.modal {
+    /* display: none; Replaced by JS control */
+    position: fixed;
+    z-index: 1001;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+    align-items: center; /* Vertically center */
+    justify-content: center; /* Horizontally center */
+    display: flex; /* Use flex for centering, will be toggled by JS */
+}
+
+.modal-content {
+    background-color: #fefefe;
+    padding: 25px 30px;
+    border: 1px solid #bbb;
+    width: 90%;
+    max-width: 450px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    position: relative; /* For close button positioning */
+}
+
+.modal-content h4 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 1.25rem;
+    color: #333;
+}
+
+.modal-content input[type="text"],
+.modal-content input[type="email"],
+.modal-content input[type="password"] { /* General modal input styling */
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.modal-content button {
+    padding: 10px 18px;
+    font-size: 0.95rem;
+    margin-right: 10px;
+}
+.modal-content button:last-child {
+    margin-right: 0;
+}
+.modal-content .button-primary { /* Specific styling for primary button in modal */
+    background-color: #007bff;
+    color: white;
+}
+.modal-content .button-primary:hover {
+    background-color: #0056b3;
+}
+
+
+.close-button {
+    color: #888;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: #333;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+
+/* Mobile specific design - Footer Icon Menu */
+@media (max-width: 768px) {
+    .app-header h1 {
+        font-size: 1.2rem; /* Smaller title on mobile */
+    }
+    .user-nav #usernameDisplay {
+        display: none; /* Hide username text on small screens */
+    }
+
+    .app-container {
+        /* On mobile, typically one view (sidebar, notes list, or editor) is prominent */
+        /* The logic for this often involves JS to toggle visibility or change layout */
+        margin-bottom: 50px; /* Space for footer menu */
+        height: calc(100vh - 60px - 50px); /* Header and footer menu */
+    }
+
+    .sidebar {
+        /* Could be hidden by default and toggled by a menu button */
+        /* display: none; */
+        position: absolute;
+        left: -260px; /* Hidden off-screen */
+        top: 60px; /* Below header */
+        height: calc(100vh - 60px);
+        z-index: 999;
+        transition: left 0.3s ease-in-out;
+    }
+    .sidebar.open {
+        left: 0; /* Slide in */
+        box-shadow: 3px 0 10px rgba(0,0,0,0.1);
+    }
+
+
+    .main-content {
+        /* By default, show note list, hide editor, or vice-versa */
+    }
+
+    .note-list-panel {
+        width: 100%; /* Takes full width if editor is hidden */
+        height: 100%;
+        border-right: none;
+    }
+
+    .note-editor-panel {
+        /* display: none; /* Hidden by default, shown when a note is selected */
+        position: absolute;
+        top: 60px; /* Below header */
+        left: 0;
+        width: 100%;
+        height: calc(100vh - 60px - 50px); /* Full height above footer menu */
+        z-index: 998; /* Below sidebar if it overlaps */
+        /* Transition for sliding in/out if desired */
+    }
+
+    /* JS will toggle these classes to show one or the other panel */
+    .mobile-view-list .note-editor-panel { display: none; }
+    .mobile-view-list .note-list-panel { display: flex; } /* Ensure it's flex */
+
+    .mobile-view-editor .note-list-panel { display: none; }
+    .mobile-view-editor .note-editor-panel { display: flex; } /* Ensure it's flex */
+    .mobile-view-editor .sidebar.open { left: -260px; } /* Close sidebar if editor opens */
+
+
+    .app-footer {
+        display: flex; /* Show footer menu on mobile */
+    }
+
+    #noteContentTextarea {
+        background-image: linear-gradient(to bottom, transparent calc(1.6em - 1px), #e8e8e8 1.6em);
+        background-size: 100% 1.6em; /* Adjust line spacing for mobile if needed */
+        line-height: 1.6;
+        padding: 1rem;
+    }
+    .note-editor-panel .panel-header, .toolbar, .note-metadata {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    #noteTitleInput { font-size: 1.2rem; }
+
+    /* Modal on mobile */
+    .modal-content {
+        margin: 10% auto;
+        width: 90%;
+        padding: 20px;
+    }
+}

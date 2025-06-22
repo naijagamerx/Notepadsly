@@ -1,0 +1,123 @@
+/* Styles for login and registration pages */
+body.auth-page { /* Apply to body if you want specific auth page background */
+    background-color: #f0f2f5; /* Light grey, common for login screens */
+}
+
+.auth-container {
+    background-color: #ffffff;
+    padding: 2rem 2.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    width: 100%;
+    max-width: 400px; /* Max width for the auth box */
+    text-align: center;
+}
+
+.auth-logo {
+    max-width: 150px; /* Adjust as needed */
+    margin-bottom: 1.5rem;
+}
+
+.auth-container h2 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    font-size: 1.75rem;
+    color: #333;
+    font-weight: 500;
+}
+
+.auth-form-container .form-group {
+    margin-bottom: 1.25rem;
+    text-align: left; /* Align labels and inputs to the left */
+}
+
+.auth-form-container .form-group label {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 0.3rem;
+}
+
+.auth-form-container input[type="text"],
+.auth-form-container input[type="email"],
+.auth-form-container input[type="password"] {
+    padding: 0.8rem; /* Slightly larger padding for auth inputs */
+    font-size: 1rem;
+}
+
+.auth-button {
+    width: 100%;
+    padding: 0.8rem;
+    font-size: 1.1rem;
+    font-weight: 500;
+    background-color: #007bff; /* Primary button color */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.auth-button:hover {
+    background-color: #0056b3; /* Darker shade on hover */
+}
+
+.auth-switch {
+    margin-top: 1.5rem;
+    font-size: 0.9em;
+    color: #555;
+}
+
+.auth-switch a {
+    color: #007bff;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+/* Error and success messages specific to auth forms */
+.auth-form-container .error-message {
+    font-size: 0.8em;
+    padding-top: 2px;
+}
+
+.auth-form-container .form-message {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.auth-form-container .form-message.success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.auth-form-container .form-message.error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+/* iOS Note Design Inspiration (very subtle for login) */
+/* The prompt mentioned iOS note design, this is more for the app itself,
+   but we can hint at it with colors if desired.
+   For now, keeping it clean and standard.
+*/
+
+/* Placeholder for logo if it's not an img tag but a div or similar */
+.logo-placeholder {
+    width: 100px;
+    height: 100px;
+    background-color: #ddd; /* Placeholder color */
+    margin: 0 auto 1.5rem auto;
+    border-radius: 50%; /* Example: circular logo */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #777;
+}
