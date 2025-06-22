@@ -22,6 +22,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Site Settings Form Elements
     const siteSettingsForm = document.getElementById('siteSettingsForm');
+    const settingLogoFileInput = document.getElementById('settingLogoFile');
+    const settingFaviconFileInput = document.getElementById('settingFaviconFile');
+    const currentLogoUrlDisplay = document.getElementById('currentLogoUrlDisplay');
+    const currentFaviconUrlDisplay = document.getElementById('currentFaviconUrlDisplay');
+
 
     // Error Log Elements
     const errorLogTableBody = document.getElementById('errorLogTableBody');
@@ -30,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const errorLogNextPageBtn = document.getElementById('errorLogNextPage');
     const errorLogPageInfo = document.getElementById('errorLogPageInfo');
     let currentErrorLogPage = 1;
-    const errorLogLimit = 25; // Should match backend default or be passed as param
+    const errorLogLimit = 25;
 
     // --- Initialization ---
     function initializeAdminDashboard() {
@@ -74,6 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderUserList(users) {
+        // ... (renderUserList implementation remains the same)
         if (!userListTableBody) return;
         userListTableBody.innerHTML = '';
         if (users.length === 0) {
@@ -91,15 +97,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="actions-cell">
                     <button class="edit-btn" data-user-id="${user.id}" title="Edit User">&#9998;</button>
                     <button class="delete-btn" data-user-id="${user.id}" title="Delete User">&times;</button>
-                    <button class="reset-password-btn" data-user-id="${user.id}" title="Send Password Reset">&#128273;</button> <!-- Key icon -->
+                    <button class="reset-password-btn" data-user-id="${user.id}" title="Send Password Reset">&#128273;</button>
                 </td>
             `;
             const editBtn = row.querySelector('.edit-btn');
             if (editBtn) editBtn.addEventListener('click', () => openEditUserModal(user.id));
-
             const deleteBtn = row.querySelector('.delete-btn');
             if (deleteBtn) deleteBtn.addEventListener('click', () => confirmDeleteUser(user.id, user.username));
-
             const resetPasswordBtn = row.querySelector('.reset-password-btn');
             if (resetPasswordBtn) resetPasswordBtn.addEventListener('click', () => confirmTriggerPasswordReset(user.id, user.username));
         });
@@ -111,6 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function displayFormErrors(formElement, errors) {
+        // ... (displayFormErrors implementation remains the same)
         if (!formElement) return;
         clearFormErrors(formElement);
         for (const field in errors) {
@@ -135,6 +140,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (siteSettingsForm.elements[inputName]) {
                             siteSettingsForm.elements[inputName].value = data.settings[key];
                         }
+                        // Update display spans for current URLs
+                        if (key === 'logo_url' && currentLogoUrlDisplay) {
+                            currentLogoUrlDisplay.textContent = data.settings[key] || 'N/A';
+                        }
+                        if (key === 'favicon_url' && currentFaviconUrlDisplay) {
+                            currentFaviconUrlDisplay.textContent = data.settings[key] || 'N/A';
+                        }
                     }
                 } else {
                     showGlobalNotification(data.message || 'Failed to load site settings.', 'error');
@@ -146,7 +158,89 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    async function handleSiteSettingsSubmit(e) {
+        e.preventDefault();
+        let overallSuccess = true;
+        let messages = [];
+
+        // Handle file uploads first
+        const logoFile = settingLogoFileInput && settingLogoFileInput.files[0];
+        const faviconFile = settingFaviconFileInput && settingFaviconFileInput.files[0];
+
+        if (logoFile) {
+            const logoFormData = new FormData();
+            logoFormData.append('asset_file', logoFile);
+            logoFormData.append('asset_type', 'logo');
+            try {
+                const response = await fetch('../php/admin_handler.php?action=upload_site_asset', { method: 'POST', body: logoFormData });
+                const data = await response.json();
+                if (data.success) {
+                    messages.push(data.message);
+                    if(currentLogoUrlDisplay && data.url) currentLogoUrlDisplay.textContent = data.url;
+                } else {
+                    overallSuccess = false;
+                    messages.push(data.message || 'Logo upload failed.');
+                }
+            } catch (error) {
+                overallSuccess = false;
+                messages.push('Error uploading logo.');
+                console.error('Logo Upload Error:', error);
+            }
+        }
+
+        if (faviconFile) {
+            const faviconFormData = new FormData();
+            faviconFormData.append('asset_file', faviconFile);
+            faviconFormData.append('asset_type', 'favicon');
+            try {
+                const response = await fetch('../php/admin_handler.php?action=upload_site_asset', { method: 'POST', body: faviconFormData });
+                const data = await response.json();
+                if (data.success) {
+                    messages.push(data.message);
+                     if(currentFaviconUrlDisplay && data.url) currentFaviconUrlDisplay.textContent = data.url;
+                } else {
+                    overallSuccess = false;
+                    messages.push(data.message || 'Favicon upload failed.');
+                }
+            } catch (error) {
+                overallSuccess = false;
+                messages.push('Error uploading favicon.');
+                console.error('Favicon Upload Error:', error);
+            }
+        }
+
+        // Then, submit other text-based settings
+        const textSettingsFormData = new FormData(siteSettingsForm);
+        // Remove file inputs from this form data if they were included, to avoid issues with PHP $_POST
+        textSettingsFormData.delete('logo_file');
+        textSettingsFormData.delete('favicon_file');
+
+        try {
+            const response = await fetch('../php/admin_handler.php?action=update_site_settings', { method: 'POST', body: textSettingsFormData });
+            const data = await response.json();
+            if (data.success) {
+                messages.push(data.message || 'Settings updated.');
+            } else {
+                overallSuccess = false;
+                messages.push(data.message || 'Failed to update some settings.');
+            }
+        } catch (error) {
+            overallSuccess = false;
+            messages.push('Error updating text settings.');
+            console.error('Update Site Settings Error:', error);
+        }
+
+        showGlobalNotification(messages.join(' '), overallSuccess ? 'success' : 'error');
+        if (overallSuccess) {
+            loadSiteSettings(); // Reload to show potentially updated URLs from DB if uploads changed them
+             if(settingLogoFileInput) settingLogoFileInput.value = ''; // Clear file inputs
+             if(settingFaviconFileInput) settingFaviconFileInput.value = '';
+        }
+    }
+
+
     function loadErrorLogs(page = 1) {
+        // ... (loadErrorLogs implementation remains the same)
         if (!errorLogTableBody) return;
         currentErrorLogPage = page;
         fetch(`../php/admin_handler.php?action=get_error_logs&page=${page}&limit=${errorLogLimit}`)
@@ -167,6 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderErrorLogs(logs, pagination) {
+        // ... (renderErrorLogs implementation remains the same)
         if (!errorLogTableBody) return;
         errorLogTableBody.innerHTML = '';
 
@@ -176,7 +271,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         if(errorLogPaginationControls) errorLogPaginationControls.style.display = 'block';
-
 
         logs.forEach(log => {
             const row = errorLogTableBody.insertRow();
@@ -191,7 +285,6 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         });
 
-        // Update pagination controls
         if (errorLogPageInfo) errorLogPageInfo.textContent = `Page ${pagination.currentPage} of ${pagination.totalPages} (Total: ${pagination.totalLogs})`;
         if (errorLogPrevPageBtn) errorLogPrevPageBtn.disabled = pagination.currentPage <= 1;
         if (errorLogNextPageBtn) errorLogNextPageBtn.disabled = pagination.currentPage >= pagination.totalPages;
@@ -199,6 +292,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     function setupEventListeners() {
+        // ... (sidebar, add user, edit user modal listeners remain the same)
         sidebarLinks.forEach(link => {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -274,8 +368,10 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        [addUserModal, editUserModal].forEach(modal => {
+        [addUserModal, editUserModal].forEach(modal => { // Add other modals if they exist
             if (modal) {
+                const closeBtn = modal.querySelector('.close-button');
+                if(closeBtn) closeBtn.addEventListener('click', () => modal.style.display = 'none');
                 window.addEventListener('click', (event) => {
                     if (event.target == modal) modal.style.display = 'none';
                 });
@@ -283,26 +379,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if (siteSettingsForm) {
-            siteSettingsForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const formData = new FormData(siteSettingsForm);
-                fetch('../php/admin_handler.php?action=update_site_settings', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showGlobalNotification(data.message || 'Settings updated successfully!', 'success');
-                    } else {
-                        showGlobalNotification(data.message || 'Failed to update settings.', 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Update Site Settings Error:', error);
-                    showGlobalNotification('An error occurred while updating settings.', 'error');
-                });
-            });
+            siteSettingsForm.addEventListener('submit', handleSiteSettingsSubmit);
         }
 
         if(errorLogPrevPageBtn) {
@@ -314,14 +391,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if(errorLogNextPageBtn) {
             errorLogNextPageBtn.addEventListener('click', () => {
-                // Check against totalPages if available from pagination data
+                // Check against totalPages would be better here, this is a simplified version
                 loadErrorLogs(currentErrorLogPage + 1);
             });
         }
-
     }
 
     function openEditUserModal(userId) {
+        // ... (openEditUserModal implementation remains the same)
         if (!editUserModal || !editUserForm) return;
         clearFormErrors(editUserForm);
         fetch(`../php/admin_handler.php?action=get_user_details&user_id=${userId}`)
@@ -344,12 +421,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function confirmDeleteUser(userId, username) {
+        // ... (confirmDeleteUser implementation remains the same)
         if (confirm(`Are you sure you want to delete user "${escapeHTML(username)}" (ID: ${userId})? This action cannot be undone.`)) {
             deleteUser(userId);
         }
     }
 
     function deleteUser(userId) {
+        // ... (deleteUser implementation remains the same)
         const formData = new FormData();
         formData.append('user_id', userId);
         fetch('../php/admin_handler.php?action=delete_user', { method: 'POST', body: formData })
@@ -369,24 +448,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function confirmTriggerPasswordReset(userId, username) {
+        // ... (confirmTriggerPasswordReset implementation remains the same)
         if (confirm(`Are you sure you want to trigger a password reset for user "${escapeHTML(username)}" (ID: ${userId})? They will need to check their email (conceptually).`)) {
             triggerPasswordReset(userId);
         }
     }
 
     function triggerPasswordReset(userId) {
+        // ... (triggerPasswordReset implementation remains the same)
         const formData = new FormData();
         formData.append('user_id', userId);
-
-        fetch('../php/admin_handler.php?action=trigger_password_reset', {
-            method: 'POST',
-            body: formData
-        })
+        fetch('../php/admin_handler.php?action=trigger_password_reset', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showGlobalNotification(data.message || 'Password reset triggered successfully!', 'success');
-                // No need to reload user list for this action
             } else {
                 showGlobalNotification(data.message || 'Failed to trigger password reset.', 'error');
             }

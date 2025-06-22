@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     // --- DOM Elements ---
     const usernameDisplay = document.getElementById('usernameDisplay');
+    const adminLinkContainer = document.getElementById('adminLinkContainer');
     const newNoteBtn = document.getElementById('newNoteBtn');
     const newFolderBtn = document.getElementById('newFolderBtn');
 
@@ -8,17 +9,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const tagListUl = document.getElementById('tagList');
     const noteListUl = document.getElementById('noteList');
 
-    const noteTitleInput = document.getElementById('noteTitleInput'); // Updated ID
-    const noteContentTextarea = document.getElementById('noteContentTextarea'); // Updated ID
+    const noteTitleInput = document.getElementById('noteTitleInput');
+    const noteContentTextarea = document.getElementById('noteContentTextarea');
+    const noteFolderSelect = document.getElementById('noteFolderSelect');
     const saveNoteBtn = document.getElementById('saveNoteBtn');
     const deleteNoteBtn = document.getElementById('deleteNoteBtn');
-    const shareNoteBtn = document.getElementById('shareNoteBtn'); // Not implemented yet
+    const shareNoteBtn = document.getElementById('shareNoteBtn');
+    const downloadNoteBtn = document.getElementById('downloadNoteBtn');
 
     const searchNotesInput = document.getElementById('searchNotes');
 
     const newFolderModal = document.getElementById('newFolderModal');
     const closeNewFolderModalBtn = newFolderModal ? newFolderModal.querySelector('.close-button[data-modal-id="newFolderModal"]') : null;
-    const newFolderNameInput = document.getElementById('newFolderNameInput'); // ID updated in HTML
+    const newFolderNameInput = document.getElementById('newFolderNameInput');
     const confirmNewFolderBtn = document.getElementById('confirmNewFolderBtn');
 
     const renameFolderModal = document.getElementById('renameFolderModal');
@@ -27,8 +30,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const renameFolderIdInput = document.getElementById('renameFolderIdInput');
     const confirmRenameFolderBtn = document.getElementById('confirmRenameFolderBtn');
 
-    const noteFolderSelect = document.getElementById('noteFolderSelect');
-
     const noteEditorPanel = document.querySelector('.note-editor-panel');
     const editorContentWrapper = noteEditorPanel ? noteEditorPanel.querySelector('.content-wrapper') : null;
     const noteTagsInput = document.getElementById('noteTagsInput');
@@ -36,36 +37,40 @@ document.addEventListener('DOMContentLoaded', function() {
     const tagSuggestionsUl = document.getElementById('tagSuggestions');
     const noteLastUpdated = document.getElementById('noteLastUpdated');
 
+    // Share Note Modal Elements
+    const shareNoteModal = document.getElementById('shareNoteModal');
+    const shareNoteForm = document.getElementById('shareNoteForm');
+    const closeShareNoteModalBtn = shareNoteModal ? shareNoteModal.querySelector('.close-button[data-modal-id="shareNoteModal"]') : null;
+    const shareNoteIdInput = document.getElementById('shareNoteIdInput'); // Hidden input in share form
+    const shareWithUserInput = document.getElementById('shareWithUserInput'); // Text input for username/email
+    const currentlySharedWithListUl = document.getElementById('currentlySharedWithList');
+    const noSharedUsersMsgLi = document.getElementById('noSharedUsersMsg');
+
+
     // Note Editor Toolbar Buttons
     const formatBoldBtn = document.getElementById('formatBoldBtn');
     const formatItalicBtn = document.getElementById('formatItalicBtn');
     const formatUnderlineBtn = document.getElementById('formatUnderlineBtn');
 
-    // Share Note Modal Elements
-    const shareNoteModal = document.getElementById('shareNoteModal');
-    const shareNoteForm = document.getElementById('shareNoteForm');
-    const closeShareNoteModalBtn = shareNoteModal ? shareNoteModal.querySelector('.close-button') : null;
-    const shareNoteIdInput = document.getElementById('shareNoteIdInput');
-    const shareWithUserInput = document.getElementById('shareWithUserInput');
-
-
     // --- State Variables ---
     let currentNoteId = null;
-    let currentNoteIsSharedWithUser = false; // Flag to indicate if the loaded note is shared with current user
-    let currentNoteTags = []; // Holds array of {id, name} for the currently edited note
-    let activeFilterTags = []; // Array of tag names for current filter
+    let currentNoteIsSharedWithUser = false;
+    let currentNoteTags = [];
+    let activeFilterTags = [];
     let currentUser = null;
     let allNotes = [];
     let allFolders = [];
-    let allUserUniqueTags = []; // For the sidebar tag list (renamed from allTags for clarity)
+    let allUserUniqueTags = [];
 
     // --- Initialization ---
     function initializeDashboard() {
         fetchUserData();
-        loadInitialData(); // Fetch notes, folders, tags
+        loadInitialData();
         setupEventListeners();
-        updateEditorState(null); // Start with no note selected
-        document.getElementById('currentYear').textContent = new Date().getFullYear();
+        updateEditorState(null);
+        if(document.getElementById('currentYear')) {
+            document.getElementById('currentYear').textContent = new Date().getFullYear();
+        }
     }
 
     function fetchUserData() {
@@ -74,24 +79,16 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success && data.username && usernameDisplay) {
                     usernameDisplay.textContent = `Welcome, ${data.username}!`;
-                    currentUser = data; // Store user data
-
-                    // Add Admin Panel link if user is admin
+                    currentUser = data;
                     if (data.role === 'admin' && adminLinkContainer) {
                         adminLinkContainer.innerHTML = `<a href="/admin_dashboard" class="button button-secondary">Admin Panel</a>`;
                     }
                 } else if (!data.success) {
-                    // Handle cases where user info couldn't be fetched (e.g. session expired)
                     console.error('Failed to fetch user info:', data.message);
-                    // Potentially redirect to login or show an error
-                    // For now, this might mean the dashboard operates without specific user details
-                    // or php/dashboard.php's main auth check would have already redirected.
                 }
             })
             .catch(error => {
                 console.error('Error fetching user data:', error);
-                // Potentially redirect to login page if critical user data is missing
-                // window.location.href = '../html/index.html';
             });
     }
 
@@ -102,34 +99,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (result.success) {
                     allNotes = result.data.notes || [];
                     allFolders = result.data.folders || [];
-                    allUserUniqueTags = result.data.tags || []; // Updated variable name
+                    allUserUniqueTags = result.data.tags || [];
 
                     renderFolders(allFolders);
-                    renderTagsSidebar(allUserUniqueTags); // Renamed for clarity
-                    renderNoteList(allNotes); // Initially render all notes
+                    renderTagsSidebar(allUserUniqueTags);
+                    renderNoteList(allNotes);
 
-                    // Select the first note if available
                     if (allNotes.length > 0) {
-                        // loadNoteIntoEditor(allNotes[0].id);
-                        // setActiveNoteListItem(allNotes[0].id);
+                        // updateEditorState(null);
+                        // setActiveNoteListItem(null);
                     } else {
-                        updateEditorState(null); // No notes, show empty state
+                        updateEditorState(null);
                     }
                 } else {
                     console.error('Failed to load initial data:', result.message);
+                    showGlobalNotification(result.message || 'Failed to load data.', 'error');
                 }
             })
-            .catch(error => console.error('Error loading initial data:', error));
+            .catch(error => {
+                console.error('Error loading initial data:', error);
+                showGlobalNotification('Error loading initial data.', 'error');
+            });
     }
 
     // --- Rendering Functions ---
     function renderFolders(folders) {
         if (!folderListUl) return;
-        folderListUl.innerHTML = '<li><a href="#" data-folder-id="all" class="active"><span>All Notes</span></a></li>'; // Default "All Notes"
+        folderListUl.innerHTML = '<li><a href="#" data-folder-id="all" class="active"><span>All Notes</span></a></li>';
 
-        // Populate folder dropdown in note editor
         if (noteFolderSelect) {
-            noteFolderSelect.innerHTML = '<option value="">Uncategorized</option>'; // Default option
+            noteFolderSelect.innerHTML = '<option value="">Uncategorized</option>';
             folders.forEach(folder => {
                 const option = document.createElement('option');
                 option.value = folder.id;
@@ -140,45 +139,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
         folders.forEach(folder => {
             const li = document.createElement('li');
-            li.dataset.folderId = folder.id; // For easier selection later if needed
+            li.dataset.folderId = folder.id;
             li.innerHTML = `
                 <a href="#" data-folder-id="${folder.id}">
                     <span>${escapeHTML(folder.name)}</span>
                     <span class="folder-item-actions">
-                        <button class="edit-folder-btn" title="Rename folder">&#9998;</button> <!-- Pencil icon -->
-                        <button class="delete-folder-btn" title="Delete folder">&times;</button> <!-- Cross icon -->
+                        <button class="edit-folder-btn" title="Rename folder">&#9998;</button>
+                        <button class="delete-folder-btn" title="Delete folder">&times;</button>
                     </span>
                 </a>`;
 
             const editBtn = li.querySelector('.edit-folder-btn');
+            if(editBtn) editBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); e.preventDefault(); openRenameFolderModal(folder.id, folder.name);
+            });
             const deleteBtn = li.querySelector('.delete-folder-btn');
-
-            editBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent folder navigation
-                e.preventDefault();
-                openRenameFolderModal(folder.id, folder.name);
+            if(deleteBtn) deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); e.preventDefault(); confirmDeleteFolder(folder.id, folder.name);
             });
-
-            deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                confirmDeleteFolder(folder.id, folder.name);
-            });
-
             folderListUl.appendChild(li);
         });
 
         const activeFolderLink = folderListUl.querySelector('a.active');
         if (!activeFolderLink && folderListUl.querySelector('a[data-folder-id="all"]')) {
              folderListUl.querySelector('a[data-folder-id="all"]').classList.add('active');
-        } else if (activeFolderLink) { // Ensure the active class is on the 'a' tag
+        } else if (activeFolderLink) {
             setActiveFolderListItem(activeFolderLink.dataset.folderId);
         }
     }
 
-    function renderTagsSidebar(tags) { // Renamed from renderTags
+    function renderTagsSidebar(tags) {
         if (!tagListUl) return;
-        tagListUl.innerHTML = ''; // Clear existing
+        tagListUl.innerHTML = '';
         if (tags.length === 0) {
             tagListUl.innerHTML = '<li><small>No tags yet.</small></li>';
             return;
@@ -204,21 +196,19 @@ document.addEventListener('DOMContentLoaded', function() {
             removeBtn.classList.add('remove-tag-btn');
             removeBtn.innerHTML = '&times;';
             removeBtn.title = `Remove tag: ${escapeHTML(tag.name)}`;
+            removeBtn.style.display = (currentNoteIsSharedWithUser && noteTitleInput && noteTitleInput.disabled) ? 'none' : 'inline';
             removeBtn.addEventListener('click', () => {
-                // Remove from currentNoteTags array
-                currentNoteTags = currentNoteTags.filter(t => t.id !== tag.id);
-                renderCurrentNoteTags(); // Re-render pills
-                // Note: This only updates UI; actual removal from DB happens on note save.
+                currentNoteTags = currentNoteTags.filter(t => t.id !== tag.id || (t.id === null && t.name !== tag.name) );
+                renderCurrentNoteTags();
             });
             pill.appendChild(removeBtn);
             currentNoteTagsDisplay.appendChild(pill);
         });
     }
 
-
     function renderNoteList(notesToRender) {
         if (!noteListUl) return;
-        noteListUl.innerHTML = ''; // Clear existing
+        noteListUl.innerHTML = '';
         if (notesToRender.length === 0) {
             noteListUl.innerHTML = '<li class="no-notes-message">No notes found.</li>';
             return;
@@ -233,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (note.note_status === 'shared') {
                 titleHTML += `<small class="shared-indicator">(Shared by ${escapeHTML(note.shared_by_username)})</small>`;
-                li.classList.add('shared-note-item'); // For specific styling of shared notes
+                li.classList.add('shared-note-item');
             }
 
             li.innerHTML = `
@@ -242,7 +232,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <small>${date}</small>
             `;
             li.addEventListener('click', () => {
-                loadNoteIntoEditor(note.id); // loadNoteIntoEditor will check note_status for read-only
+                loadNoteIntoEditor(note.id);
                 setActiveNoteListItem(note.id);
             });
             noteListUl.appendChild(li);
@@ -267,34 +257,30 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-
     // --- Editor Functions ---
     function loadNoteIntoEditor(noteId) {
-        const note = allNotes.find(n => n.id == noteId);
-        if (note) {
-            // Fetch full note content if snippet is not enough or it's a different structure
-            // For now, assuming 'snippet' might be full content for simplicity or a separate fetch is needed
-            // Let's assume we need to fetch the full note.
-            fetch(`../php/dashboard.php?action=get_note_content&id=${noteId}`)
-                .then(response => response.json())
-                .then(result => {
-                    if (result.success && result.note) {
-                        updateEditorState(result.note);
-                        currentNoteId = noteId;
-                    } else {
-                        console.error("Failed to load note content:", result.message);
-                        showGlobalNotification(result.message || "Error loading note.", 'error');
-                        updateEditorState(null);
-                    }
-                })
-                .catch(err => {
-                    console.error("Error fetching note content:", err);
-                    showGlobalNotification("Error loading note.", 'error');
+        const noteToLoad = allNotes.find(n => n.id == noteId);
+        if (noteToLoad) {
+            fetch(`../php/dashboard.php?action=get_note_content&id=${noteToLoad.id}`)
+            .then(response => response.json())
+            .then(result => {
+                if (result.success && result.note) {
+                    result.note.note_status = noteToLoad.note_status || 'owner';
+                    result.note.permission = noteToLoad.permission || null;
+                    result.note.shared_by_username = noteToLoad.shared_by_username || null; // Carry over for UI if needed
+                    updateEditorState(result.note);
+                } else {
+                    showGlobalNotification(result.message || "Error loading note content.", 'error');
                     updateEditorState(null);
-                });
+                }
+            })
+            .catch(err => {
+                console.error("Error fetching note content:", err);
+                showGlobalNotification("Error loading note content.", 'error');
+                updateEditorState(null);
+            });
         } else {
-            // This case might not need a user notification if it's an internal state issue
-            console.warn(`Note with ID ${noteId} not found in local cache.`);
+            console.warn(`Note with ID ${noteId} not found in local cache for loading.`);
             updateEditorState(null);
         }
     }
@@ -302,19 +288,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateEditorState(noteData) {
         if (!noteEditorPanel || !editorContentWrapper) return;
 
-        if (noteData && noteData.id) { // A note is selected/loaded
+        if (noteData && noteData.id) {
             noteEditorPanel.classList.remove('empty');
-            editorContentWrapper.style.display = 'flex'; // Show content
+            editorContentWrapper.style.display = 'flex';
 
-            noteTitleInput.value = noteData.title || '';
-            noteContentTextarea.value = noteData.content || '';
             currentNoteId = noteData.id;
-            if (noteFolderSelect) {
-                noteFolderSelect.value = noteData.folder_id || ""; // Set folder dropdown
-            }
+            if (noteTitleInput) noteTitleInput.value = noteData.title || '';
+            if (noteContentTextarea) noteContentTextarea.value = noteData.content || '';
+            if (noteFolderSelect) noteFolderSelect.value = noteData.folder_id || "";
+
             currentNoteTags = noteData.tags || [];
             renderCurrentNoteTags();
-            if (noteTagsInput) noteTagsInput.value = ''; // Clear the input field
+            if (noteTagsInput) noteTagsInput.value = '';
 
             if (noteLastUpdated) {
                 noteLastUpdated.textContent = `Last updated: ${new Date(noteData.updated_at).toLocaleString()}`;
@@ -323,28 +308,25 @@ document.addEventListener('DOMContentLoaded', function() {
             currentNoteIsSharedWithUser = (noteData.note_status === 'shared');
             const isReadOnly = currentNoteIsSharedWithUser && noteData.permission === 'read';
 
-            // Enable/Disable editor fields based on read-only status
             if (noteTitleInput) noteTitleInput.disabled = isReadOnly;
             if (noteContentTextarea) noteContentTextarea.disabled = isReadOnly;
             if (noteFolderSelect) noteFolderSelect.disabled = isReadOnly;
             if (noteTagsInput) noteTagsInput.disabled = isReadOnly;
-            // Disable remove buttons on tag pills if read-only
+
             currentNoteTagsDisplay.querySelectorAll('.remove-tag-btn').forEach(btn => btn.style.display = isReadOnly ? 'none' : 'inline');
 
-
             if (saveNoteBtn) saveNoteBtn.style.display = isReadOnly ? 'none' : 'inline-block';
-            // If it's a shared note, user shouldn't be able to re-share or delete it (for now)
-            if (shareNoteBtn) shareNoteBtn.style.display = isReadOnly ? 'none' : 'inline-block'; // Hide share if it's already a shared note they are viewing
-            if (deleteNoteBtn) deleteNoteBtn.style.display = isReadOnly ? 'none' : 'inline-block';
+            if (shareNoteBtn) shareNoteBtn.style.display = currentNoteIsSharedWithUser ? 'none' : 'inline-block';
+            if (deleteNoteBtn) deleteNoteBtn.style.display = currentNoteIsSharedWithUser ? 'none' : 'inline-block';
+            if (downloadNoteBtn) downloadNoteBtn.style.display = 'inline-block';
 
-
-        } else { // No note selected or new note state
+        } else {
             noteEditorPanel.classList.add('empty');
-            editorContentWrapper.style.display = 'none'; // Hide content wrapper
+            editorContentWrapper.style.display = 'none';
 
             if (noteTitleInput) noteTitleInput.value = '';
             if (noteContentTextarea) noteContentTextarea.value = '';
-            if (noteFolderSelect) noteFolderSelect.value = ""; // Reset folder dropdown
+            if (noteFolderSelect) noteFolderSelect.value = "";
             currentNoteId = null;
             currentNoteIsSharedWithUser = false;
             currentNoteTags = [];
@@ -352,42 +334,35 @@ document.addEventListener('DOMContentLoaded', function() {
             if (noteTagsInput) noteTagsInput.value = '';
             if (noteLastUpdated) noteLastUpdated.textContent = 'Last updated: N/A';
 
-            // Reset all editor fields to enabled by default when no note is selected (or new note)
             if (noteTitleInput) noteTitleInput.disabled = false;
             if (noteContentTextarea) noteContentTextarea.disabled = false;
             if (noteFolderSelect) noteFolderSelect.disabled = false;
             if (noteTagsInput) noteTagsInput.disabled = false;
             if (saveNoteBtn) saveNoteBtn.style.display = 'inline-block';
-            if (shareNoteBtn) shareNoteBtn.style.display = 'inline-block'; // Show share for owned new/empty note
+            if (shareNoteBtn) shareNoteBtn.style.display = 'inline-block';
             if (deleteNoteBtn) deleteNoteBtn.style.display = 'inline-block';
+            if (downloadNoteBtn) downloadNoteBtn.style.display = 'none';
         }
     }
 
-
     function saveCurrentNote() {
-        if (!noteTitleInput || !noteContentTextarea || !noteFolderSelect) return;
+        if (!noteTitleInput || !noteContentTextarea || !noteFolderSelect || (noteTitleInput.disabled)) return;
 
         const title = noteTitleInput.value.trim();
         const content = noteContentTextarea.value;
         const folderId = noteFolderSelect.value;
-
-        // Get tag names from the currentNoteTags array (these are the ones visually present)
         const tagNamesToSend = currentNoteTags.map(tag => tag.name);
-
         let url;
+
         const formData = new FormData();
         formData.append('title', title);
         formData.append('content', content);
-        if (folderId) {
-            formData.append('folder_id', folderId);
-        }
-        formData.append('tags', JSON.stringify(tagNamesToSend)); // Send as JSON string array
+        if (folderId) formData.append('folder_id', folderId);
 
-        if (currentNoteId) { // Update existing note
-            // url = `../php/dashboard.php?action=update_note&id=${currentNoteId}`; // ID in GET is not how PHP is structured
-            url = `../php/dashboard.php?action=update_note`; // PHP expects note_id in POST
+        if (currentNoteId) {
+            url = `../php/dashboard.php?action=update_note`;
             formData.append('note_id', currentNoteId);
-        } else { // Create new note
+        } else {
             url = '../php/dashboard.php?action=create_note';
         }
 
@@ -396,26 +371,17 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(result => {
                 if (result.success) {
                     showGlobalNotification(result.message || 'Note saved!', 'success');
-
-                    // If a new note was created, the result will contain its ID
                     const savedNoteId = result.note_id || currentNoteId;
 
-                    // After saving, we need to sync tags if it's an existing note,
-                    // or if it's a new note and tags were added before the first save.
-                    // The backend `create_note` doesn't handle tags yet, so we'll call sync_note_tags.
-                    // The backend `update_note` also doesn't handle tags yet based on current PHP.
-                    // The `sync_note_tags` PHP action is now the sole way to update tags.
-                    // So, after note create/update, call sync.
-
-                    if (savedNoteId) { // Ensure we have a note ID
+                    if (savedNoteId) {
                         syncTagsForNote(savedNoteId, tagNamesToSend).then(() => {
-                            loadInitialData(); // Reload all data to reflect note & tag changes
-                            setTimeout(() => { // Re-select and load the note
+                            loadInitialData();
+                            setTimeout(() => {
                                 setActiveNoteListItem(savedNoteId);
                                 loadNoteIntoEditor(savedNoteId);
                             }, 100);
-                        });
-                    } else { // Should not happen if save was successful
+                        }).catch(() => loadInitialData());
+                    } else {
                         loadInitialData();
                     }
                 } else {
@@ -431,40 +397,31 @@ document.addEventListener('DOMContentLoaded', function() {
     function syncTagsForNote(noteId, tagsArray) {
         const formData = new FormData();
         formData.append('note_id', noteId);
-        formData.append('tags', JSON.stringify(tagsArray)); // Send array of tag names
+        formData.append('tags', JSON.stringify(tagsArray));
 
-        return fetch('../php/dashboard.php?action=sync_note_tags', {
-            method: 'POST',
-            body: formData
-        })
+        return fetch('../php/dashboard.php?action=sync_note_tags', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Update currentNoteTags with the definitive list from server
-                currentNoteTags = data.tags || [];
+                currentNoteTags = data.tags || []; // Update local tags with definitive list from server
                 renderCurrentNoteTags();
-                // Potentially update sidebar tag list if new global tags were created
-                // loadInitialData() called by saveCurrentNote will handle this.
-                showGlobalNotification(data.message || 'Tags synced!', 'success');
             } else {
                 showGlobalNotification(data.message || 'Failed to sync tags.', 'error');
             }
-            return data; // Return data for promise chaining
+            return data;
         })
         .catch(error => {
             console.error('Error syncing tags:', error);
             showGlobalNotification('An error occurred while syncing tags.', 'error');
-            throw error; // Re-throw for promise chain
+            throw error;
         });
     }
 
-
     function deleteCurrentNote() {
-        if (!currentNoteId) {
-            showGlobalNotification("No note selected to delete.", "info");
+        if (!currentNoteId || (noteTitleInput && noteTitleInput.disabled)) {
+            showGlobalNotification("No note selected or cannot delete this note.", "info");
             return;
         }
-        // Using confirm is okay for destructive actions, but a custom modal could be used for consistency.
         if (!confirm(`Are you sure you want to delete the note "${escapeHTML(noteTitleInput.value)}"?`)) {
             return;
         }
@@ -493,17 +450,23 @@ document.addEventListener('DOMContentLoaded', function() {
     function setupEventListeners() {
         if (newNoteBtn) {
             newNoteBtn.addEventListener('click', () => {
-                updateEditorState(null); // Clear editor for a new note
-                setActiveNoteListItem(null); // Deselect any active note in list
-                noteTitleInput.focus();
+                updateEditorState(null);
+                setActiveNoteListItem(null);
+                if(noteTitleInput) noteTitleInput.focus();
             });
         }
 
-        if (saveNoteBtn) {
-            saveNoteBtn.addEventListener('click', saveCurrentNote);
-        }
-        if (deleteNoteBtn) {
-            deleteNoteBtn.addEventListener('click', deleteCurrentNote);
+        if (saveNoteBtn) saveNoteBtn.addEventListener('click', saveCurrentNote);
+        if (deleteNoteBtn) deleteNoteBtn.addEventListener('click', deleteCurrentNote);
+
+        if (downloadNoteBtn) {
+            downloadNoteBtn.addEventListener('click', () => {
+                if (currentNoteId) {
+                    window.location.href = `../php/dashboard.php?action=download_note&id=${currentNoteId}`;
+                } else {
+                    showGlobalNotification("No note selected to download.", "info");
+                }
+            });
         }
 
         if (shareNoteBtn) {
@@ -512,30 +475,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     showGlobalNotification("Please select a note to share.", "info");
                     return;
                 }
-                if (currentNoteIsSharedWithUser) { // Should not happen as button is hidden
-                    showGlobalNotification("This note is already shared with you and cannot be re-shared.", "info");
+                if (currentNoteIsSharedWithUser) {
+                    showGlobalNotification("This note is shared with you and cannot be re-shared.", "info");
                     return;
                 }
-                if (shareNoteModal && shareNoteIdInput && shareNoteForm) {
-                    shareNoteForm.reset();
-                    shareNoteIdInput.value = currentNoteId;
-                    shareNoteModal.style.display = 'flex';
-                    if(shareWithUserInput) shareWithUserInput.focus();
-                }
+                openShareModal(); // Call helper to open and populate
             });
         }
 
-        // New Folder Modal listeners
         if (newFolderBtn && newFolderModal && closeNewFolderModalBtn && confirmNewFolderBtn && newFolderNameInput) {
             newFolderBtn.addEventListener('click', () => {
-                newFolderNameInput.value = '';
-                newFolderModal.style.display = 'flex';
-                newFolderNameInput.focus();
+                if(newFolderNameInput) newFolderNameInput.value = '';
+                if(newFolderModal) {
+                    const form = newFolderModal.querySelector('form');
+                    if(form) clearFormErrors(form);
+                    newFolderModal.style.display = 'flex';
+                    if(newFolderNameInput) newFolderNameInput.focus();
+                }
             });
+        }
+        if (closeNewFolderModalBtn) {
             closeNewFolderModalBtn.addEventListener('click', () => {
-                newFolderModal.style.display = 'none';
+                if (newFolderModal) newFolderModal.style.display = 'none';
             });
-            confirmNewFolderBtn.addEventListener('click', () => {
+        }
+        if (confirmNewFolderBtn && newFolderNameInput) {
+             confirmNewFolderBtn.addEventListener('click', () => {
                 const folderName = newFolderNameInput.value.trim();
                 if (folderName) {
                     createFolder(folderName);
@@ -545,23 +510,37 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // Rename Folder Modal listeners
-        if (renameFolderModal && closeRenameFolderModalBtn && confirmRenameFolderBtn && renameFolderNameInput) {
+        if (closeRenameFolderModalBtn && renameFolderModal) {
             closeRenameFolderModalBtn.addEventListener('click', () => {
-                renameFolderModal.style.display = 'none';
-            });
-            confirmRenameFolderBtn.addEventListener('click', () => {
-                const newName = renameFolderNameInput.value.trim();
-                const folderId = renameFolderIdInput.value;
-                if (newName && folderId) {
-                    renameFolder(folderId, newName);
-                } else {
-                    showGlobalNotification("Folder name cannot be empty.", "error");
-                }
+                if (renameFolderModal) renameFolderModal.style.display = 'none';
             });
         }
+        if (confirmRenameFolderBtn && renameFolderNameInput && renameFolderIdInput && renameFolderModal) {
+            const form = renameFolderModal.querySelector('form');
+            if (form) { // Check if form exists before adding listener
+                form.addEventListener('submit', (e) => { // Assuming rename modal also has a form
+                     e.preventDefault();
+                     const newName = renameFolderNameInput.value.trim();
+                     const folderId = renameFolderIdInput.value;
+                     if (newName && folderId) {
+                         renameFolder(folderId, newName);
+                     } else {
+                         showGlobalNotification("Folder name cannot be empty.", "error");
+                     }
+                });
+            } else if (confirmRenameFolderBtn) { // Fallback if no form, direct button click
+                 confirmRenameFolderBtn.addEventListener('click', () => {
+                    const newName = renameFolderNameInput.value.trim();
+                    const folderId = renameFolderIdInput.value;
+                    if (newName && folderId) {
+                        renameFolder(folderId, newName);
+                    } else {
+                        showGlobalNotification("Folder name cannot be empty.", "error");
+                    }
+                });
+            }
+        }
 
-        // Generic modal closing by clicking outside
         [newFolderModal, renameFolderModal, shareNoteModal].forEach(modal => {
             if (modal) {
                 const closeBtn = modal.querySelector('.close-button');
@@ -576,9 +555,34 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
+        if (shareNoteForm) {
+            shareNoteForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(shareNoteForm);
+                fetch('../php/dashboard.php?action=share_note', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showGlobalNotification(data.message || 'Note shared successfully!', 'success');
+                        if (shareNoteModal) shareNoteModal.style.display = 'none';
+                        // Refresh shared users list in modal if it was open for the same note
+                        if(currentNoteId && shareNoteIdInput && shareNoteIdInput.value == currentNoteId) {
+                            loadSharedWithUsers(currentNoteId);
+                        }
+                        loadInitialData(); // To reflect shared status in main list
+                    } else {
+                        showGlobalNotification(data.message || 'Failed to share note.', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Share Note Error:', error);
+                    showGlobalNotification('An error occurred while sharing the note.', 'error');
+                });
+            });
+        }
+
         if (folderListUl) {
             folderListUl.addEventListener('click', (e) => {
-                // Navigate if 'A' or 'SPAN' inside 'A' is clicked, but not buttons inside 'A'
                 const anchor = e.target.closest('a[data-folder-id]');
                 if (anchor && !e.target.closest('button')) {
                     e.preventDefault();
@@ -591,31 +595,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (tagListUl) {
             tagListUl.addEventListener('click', (e) => {
-                if (e.target.tagName === 'A' && e.target.dataset.tagId) {
+                const anchor = e.target.closest('a[data-tag-id]');
+                if (anchor) {
                     e.preventDefault();
-                    const folderId = e.target.dataset.folderId;
-                    setActiveFolderListItem(folderId);
-                    filterNotesByFolder(folderId);
-                }
-            });
-        }
-
-        if (tagListUl) {
-            tagListUl.addEventListener('click', (e) => {
-                if (e.target.closest('a[data-tag-id]')) {
-                    e.preventDefault();
-                    const tagName = e.target.closest('a[data-tag-id]').dataset.tagName; // Using data-tag-name
+                    const tagName = anchor.dataset.tagName;
                     if (!tagName) return;
 
-                    // Toggle tag in activeFilterTags
                     if (activeFilterTags.includes(tagName)) {
                         activeFilterTags = activeFilterTags.filter(t => t !== tagName);
-                        e.target.closest('a[data-tag-id]').classList.remove('active-filter');
+                        anchor.classList.remove('active-filter');
                     } else {
                         activeFilterTags.push(tagName);
-                        e.target.closest('a[data-tag-id]').classList.add('active-filter');
+                        anchor.classList.add('active-filter');
                     }
-
                     filterNotesByActiveTags();
                     updateClearTagFiltersButton();
                 }
@@ -627,51 +619,32 @@ document.addEventListener('DOMContentLoaded', function() {
             clearTagFiltersBtn.addEventListener('click', () => {
                 activeFilterTags = [];
                 document.querySelectorAll('#tagList a.active-filter').forEach(el => el.classList.remove('active-filter'));
-                filterNotesByActiveTags(); // Will show all notes as no tags are active
                 updateClearTagFiltersButton();
-                // Also ensure folder filter is reset or considered
+                // Re-apply current folder filter or show all notes
                 const activeFolderLink = folderListUl.querySelector('a.active');
-                if (activeFolderLink && activeFolderLink.dataset.folderId !== 'all') {
-                    // If a specific folder is active, re-filter by it, otherwise all notes are shown
-                    // This part depends on desired interaction between tag and folder filters
+                if (activeFolderLink) {
+                    filterNotesByFolder(activeFolderLink.dataset.folderId);
                 } else {
-                     renderNoteList(allNotes); // If "All Notes" was active for folders
+                    filterNotesByActiveTags(); // Should show all if folder was also all
                 }
             });
         }
 
-        // Editor Formatting Buttons
-        if (formatBoldBtn) {
-            formatBoldBtn.addEventListener('click', () => applyMarkdownFormatting('**', '**'));
-        }
-        if (formatItalicBtn) {
-            formatItalicBtn.addEventListener('click', () => applyMarkdownFormatting('*', '*'));
-        }
-        if (formatUnderlineBtn) {
-            formatUnderlineBtn.addEventListener('click', () => applyMarkdownFormatting('__', '__'));
-        }
-        // Keyboard shortcuts for formatting
+        if (formatBoldBtn) formatBoldBtn.addEventListener('click', () => applyMarkdownFormatting('**', '**'));
+        if (formatItalicBtn) formatItalicBtn.addEventListener('click', () => applyMarkdownFormatting('*', '*'));
+        if (formatUnderlineBtn) formatUnderlineBtn.addEventListener('click', () => applyMarkdownFormatting('__', '__'));
+
         if (noteContentTextarea) {
             noteContentTextarea.addEventListener('keydown', function(e) {
-                if (e.ctrlKey || e.metaKey) { // Ctrl or Cmd
+                if (e.ctrlKey || e.metaKey) {
                     switch (e.key.toLowerCase()) {
-                        case 'b':
-                            e.preventDefault();
-                            applyMarkdownFormatting('**', '**');
-                            break;
-                        case 'i':
-                            e.preventDefault();
-                            applyMarkdownFormatting('*', '*');
-                            break;
-                        case 'u':
-                            e.preventDefault();
-                            applyMarkdownFormatting('__', '__');
-                            break;
+                        case 'b': e.preventDefault(); applyMarkdownFormatting('**', '**'); break;
+                        case 'i': e.preventDefault(); applyMarkdownFormatting('*', '*'); break;
+                        case 'u': e.preventDefault(); applyMarkdownFormatting('__', '__'); break;
                     }
                 }
             });
         }
-
 
         if (noteTagsInput) {
             noteTagsInput.addEventListener('keypress', function(e) {
@@ -679,28 +652,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     e.preventDefault();
                     const tagName = noteTagsInput.value.trim().toLowerCase();
                     if (tagName) {
-                        // Check if tag already exists in currentNoteTags (by name)
-                        if (!currentNoteTags.some(t => t.name === tagName)) {
-                            // For UI, we add it with a temporary/null ID if it's new,
-                            // or find its ID if it's a known global tag.
-                            // The backend sync will handle actual ID creation/lookup.
-                            currentNoteTags.push({ id: null, name: tagName }); // id will be resolved by backend
-                            renderCurrentNoteTags();
-                        }
+                        addTagToCurrentNote(tagName);
                         noteTagsInput.value = '';
+                        if(tagSuggestionsUl) tagSuggestionsUl.style.display = 'none';
                     }
                 }
             });
-
             noteTagsInput.addEventListener('input', handleTagInput);
             noteTagsInput.addEventListener('keydown', handleTagInputKeyDown);
-            noteTagsInput.addEventListener('blur', () => { // Hide suggestions when input loses focus
-                setTimeout(() => { // Timeout to allow click on suggestion
+            noteTagsInput.addEventListener('blur', () => {
+                setTimeout(() => {
                     if (tagSuggestionsUl) tagSuggestionsUl.style.display = 'none';
                 }, 150);
             });
         }
-
 
         if (searchNotesInput) {
             searchNotesInput.addEventListener('input', (e) => {
@@ -709,17 +674,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // --- Folder Functions ---
     function createFolder(folderName) {
         const formData = new FormData();
         formData.append('name', folderName);
-
         fetch('../php/dashboard.php?action=create_folder', { method: 'POST', body: formData})
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    // alert("Folder created!"); // Or use a less intrusive notification
                     if (newFolderModal) newFolderModal.style.display = 'none';
-                    loadInitialData(); // Refresh folder list (and other data)
+                    loadInitialData();
                 } else {
                     showGlobalNotification(result.message || "Failed to create folder.", 'error');
                 }
@@ -734,6 +698,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (renameFolderModal && renameFolderNameInput && renameFolderIdInput) {
             renameFolderNameInput.value = currentName;
             renameFolderIdInput.value = folderId;
+            const form = renameFolderModal.querySelector('form');
+            if(form) clearFormErrors(form);
             renameFolderModal.style.display = 'flex';
             renameFolderNameInput.focus();
         }
@@ -743,13 +709,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData();
         formData.append('folder_id', folderId);
         formData.append('name', newName);
-
         fetch('../php/dashboard.php?action=update_folder', { method: 'POST', body: formData})
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
                     if (renameFolderModal) renameFolderModal.style.display = 'none';
-                    loadInitialData(); // Refresh data
+                    loadInitialData();
                 } else {
                     showGlobalNotification(result.message || "Failed to rename folder.", 'error');
                 }
@@ -769,13 +734,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function deleteFolder(folderId) {
         const formData = new FormData();
         formData.append('folder_id', folderId);
-
         fetch('../php/dashboard.php?action=delete_folder', { method: 'POST', body: formData})
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
                     showGlobalNotification(result.message || 'Folder deleted successfully!', 'success');
-                    loadInitialData(); // Refresh data
+                    loadInitialData();
                 } else {
                     showGlobalNotification(result.message || "Failed to delete folder.", 'error');
                 }
@@ -787,46 +751,49 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function filterNotesByFolder(folderId) {
+        activeFilterTags = [];
+        document.querySelectorAll('#tagList a.active-filter').forEach(el => el.classList.remove('active-filter'));
+        updateClearTagFiltersButton();
+
         let notesToDisplay;
         if (folderId === 'all') {
             notesToDisplay = allNotes;
         } else {
-            notesToDisplay = allNotes.filter(note => note.folder_id == folderId);
+             // When a specific folder is selected, only show notes in that folder.
+             // Shared notes might not have a folder_id relevant to the current user's folders.
+             // So, for now, specific folder views will primarily show owned notes.
+            notesToDisplay = allNotes.filter(note => note.folder_id == folderId && note.note_status === 'owner');
         }
         renderNoteList(notesToDisplay);
-
-        updateEditorState(null); // Clear editor when changing folders
-        setActiveNoteListItem(null); // Deselect any active note in list
-    }
-
-    function filterNotesBySearch(searchTerm) {
-        const lowerSearchTerm = searchTerm.toLowerCase();
-        const filteredNotes = allNotes.filter(note => {
-            const titleMatch = note.title && note.title.toLowerCase().includes(lowerSearchTerm);
-            const contentMatch = note.snippet && note.snippet.toLowerCase().includes(lowerSearchTerm); // Search snippet for performance
-            // const fullContentMatch = note.content && note.content.toLowerCase().includes(lowerSearchTerm); // More thorough
-            const tagMatch = note.tags && note.tags.some(tag => tag.name.toLowerCase().includes(lowerSearchTerm));
-            return titleMatch || contentMatch || tagMatch;
-        });
-        renderNoteList(filteredNotes);
-        updateEditorState(null); // Clear editor when searching
+        updateEditorState(null);
         setActiveNoteListItem(null);
     }
 
     function filterNotesByActiveTags() {
+        let notesToFilter = [];
+        const activeFolderLink = folderListUl.querySelector('a.active');
+        const activeFolderId = (activeFolderLink && activeFolderLink.dataset.folderId !== 'all')
+                               ? activeFolderLink.dataset.folderId
+                               : null;
+
+        if (activeFolderId) { // If a specific folder is active, filter within it
+            notesToFilter = allNotes.filter(note => note.folder_id == activeFolderId && note.note_status === 'owner');
+        } else { // Otherwise, filter all notes (owned and shared with user)
+            notesToFilter = allNotes;
+        }
+
         if (activeFilterTags.length === 0) {
-            renderNoteList(allNotes); // Show all notes if no filter is active
+            renderNoteList(notesToFilter);
         } else {
-            const filteredNotes = allNotes.filter(note => {
+            const filteredNotes = notesToFilter.filter(note => {
                 if (!note.tags || note.tags.length === 0) return false;
-                // Check if the note has ALL active filter tags (AND logic)
                 return activeFilterTags.every(filterTag =>
                     note.tags.some(noteTag => noteTag.name.toLowerCase() === filterTag.toLowerCase())
                 );
             });
             renderNoteList(filteredNotes);
         }
-        updateEditorState(null); // Clear editor when filtering
+        updateEditorState(null);
         setActiveNoteListItem(null);
     }
 
@@ -837,38 +804,50 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function filterNotesBySearch(searchTerm) {
+        const lowerSearchTerm = searchTerm.toLowerCase();
+        activeFilterTags = [];
+        document.querySelectorAll('#tagList a.active-filter').forEach(el => el.classList.remove('active-filter'));
+        updateClearTagFiltersButton();
+        setActiveFolderListItem('all');
 
-    // --- Tag Autocomplete Logic ---
+        const filteredNotes = allNotes.filter(note => {
+            const titleMatch = note.title && note.title.toLowerCase().includes(lowerSearchTerm);
+            const contentMatch = note.snippet && note.snippet.toLowerCase().includes(lowerSearchTerm);
+            const tagMatch = note.tags && note.tags.some(tag => tag.name.toLowerCase().includes(lowerSearchTerm));
+            return titleMatch || contentMatch || tagMatch;
+        });
+        renderNoteList(filteredNotes);
+        updateEditorState(null);
+        setActiveNoteListItem(null);
+    }
+
+    // --- Tag Autocomplete & Formatting Logic ---
     let suggestionIdx = -1;
 
     function applyMarkdownFormatting(prefix, suffix) {
         if (!noteContentTextarea || noteContentTextarea.disabled) return;
-
         const start = noteContentTextarea.selectionStart;
         const end = noteContentTextarea.selectionEnd;
         const selectedText = noteContentTextarea.value.substring(start, end);
         const textBefore = noteContentTextarea.value.substring(0, start);
         const textAfter = noteContentTextarea.value.substring(end);
 
-        // If selected text is already wrapped, unwrap it
-        // Also handle cases where the prefix/suffix might be part of a larger word if no text is selected.
-        // This simple version just toggles if the exact selection matches.
         if (selectedText.length > 0 && selectedText.startsWith(prefix) && selectedText.endsWith(suffix)) {
             const unwrappedText = selectedText.substring(prefix.length, selectedText.length - suffix.length);
             noteContentTextarea.value = textBefore + unwrappedText + textAfter;
             noteContentTextarea.selectionStart = start;
             noteContentTextarea.selectionEnd = start + unwrappedText.length;
         } else if (selectedText.length === 0 && textBefore.endsWith(prefix) && textAfter.startsWith(suffix)) {
-             // If no selection, and cursor is inside existing markers, remove them
             const textBeforeUnwrapped = textBefore.substring(0, textBefore.length - prefix.length);
             const textAfterUnwrapped = textAfter.substring(suffix.length);
             noteContentTextarea.value = textBeforeUnwrapped + textAfterUnwrapped;
             noteContentTextarea.selectionStart = start - prefix.length;
             noteContentTextarea.selectionEnd = start - prefix.length;
         }
-        else { // Wrap selected text or insert markers if no selection
+        else {
             noteContentTextarea.value = textBefore + prefix + selectedText + suffix + textAfter;
-            if (selectedText.length === 0) { // If no text was selected, place cursor in middle
+            if (selectedText.length === 0) {
                 noteContentTextarea.selectionStart = start + prefix.length;
                 noteContentTextarea.selectionEnd = start + prefix.length;
             } else {
@@ -877,7 +856,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         noteContentTextarea.focus();
-        // Trigger input event for any auto-saving or change detection logic if needed
         noteContentTextarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
@@ -885,7 +863,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!noteTagsInput || !tagSuggestionsUl || !allUserUniqueTags) return;
         const inputText = noteTagsInput.value.trim().toLowerCase();
         tagSuggestionsUl.innerHTML = '';
-        suggestionIdx = -1; // Reset keyboard navigation index
+        suggestionIdx = -1;
 
         if (!inputText) {
             tagSuggestionsUl.style.display = 'none';
@@ -894,14 +872,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const suggestions = allUserUniqueTags.filter(tag =>
             tag.name.toLowerCase().includes(inputText) &&
-            !currentNoteTags.some(currentTag => currentTag.name === tag.name.toLowerCase()) // Don't suggest already added tags
+            !currentNoteTags.some(currentTag => currentTag.name === tag.name.toLowerCase())
         );
 
         if (suggestions.length > 0) {
-            suggestions.slice(0, 5).forEach(tag => { // Show max 5 suggestions
+            suggestions.slice(0, 5).forEach(tag => {
                 const li = document.createElement('li');
                 li.textContent = tag.name;
-                li.addEventListener('mousedown', () => { // Mousedown to fire before blur
+                li.addEventListener('mousedown', () => {
                     addTagToCurrentNote(tag.name);
                     noteTagsInput.value = '';
                     tagSuggestionsUl.style.display = 'none';
@@ -929,7 +907,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateSuggestionSelection(items);
         } else if (e.key === 'Enter' && suggestionIdx > -1) {
             e.preventDefault();
-            items[suggestionIdx].dispatchEvent(new Event('mousedown')); // Trigger the mousedown event
+            items[suggestionIdx].dispatchEvent(new Event('mousedown'));
         } else if (e.key === 'Escape') {
             tagSuggestionsUl.style.display = 'none';
         }
@@ -949,11 +927,88 @@ document.addEventListener('DOMContentLoaded', function() {
     function addTagToCurrentNote(tagName) {
         const normalizedTagName = tagName.trim().toLowerCase();
         if (normalizedTagName && !currentNoteTags.some(t => t.name === normalizedTagName)) {
-            // Check if tag exists in allUserUniqueTags to get its ID, otherwise id is null for new tags
             const existingGlobalTag = allUserUniqueTags.find(globalTag => globalTag.name === normalizedTagName);
             currentNoteTags.push({ id: existingGlobalTag ? existingGlobalTag.id : null, name: normalizedTagName });
             renderCurrentNoteTags();
         }
+    }
+
+    // --- Share Modal Specific Functions ---
+    function openShareModal() {
+        if (shareNoteModal && shareNoteIdInput && shareNoteForm) {
+            shareNoteForm.reset(); // Clear previous input
+            if(currentlySharedWithListUl) currentlySharedWithListUl.innerHTML = ''; // Clear previous list
+            if(noSharedUsersMsgLi) noSharedUsersMsgLi.style.display = 'block';
+
+            shareNoteIdInput.value = currentNoteId;
+            loadSharedWithUsers(currentNoteId); // Fetch and display users this note is shared with
+            shareNoteModal.style.display = 'flex';
+            if(shareWithUserInput) shareWithUserInput.focus();
+        }
+    }
+
+    function loadSharedWithUsers(noteId) {
+        if (!currentlySharedWithListUl || !noSharedUsersMsgLi) return;
+
+        fetch(`../php/dashboard.php?action=get_shared_with_users&note_id=${noteId}`)
+            .then(response => response.json())
+            .then(data => {
+                currentlySharedWithListUl.innerHTML = ''; // Clear before populating
+                if (data.success && data.shared_users && data.shared_users.length > 0) {
+                    noSharedUsersMsgLi.style.display = 'none';
+                    data.shared_users.forEach(sharedUser => {
+                        const li = document.createElement('li');
+                        li.innerHTML = `
+                            <span>${escapeHTML(sharedUser.username)} (${escapeHTML(sharedUser.permission)})</span>
+                            <button class="revoke-share-btn button" data-shared-user-id="${sharedUser.user_id}">Revoke</button>
+                        `;
+                        li.querySelector('.revoke-share-btn').addEventListener('click', () => {
+                            confirmRevokeAccess(noteId, sharedUser.user_id, sharedUser.username);
+                        });
+                        currentlySharedWithListUl.appendChild(li);
+                    });
+                } else if (data.success) { // Success but no users
+                    noSharedUsersMsgLi.style.display = 'block';
+                } else {
+                    noSharedUsersMsgLi.textContent = 'Could not load shared users.';
+                    noSharedUsersMsgLi.style.display = 'block';
+                    showGlobalNotification(data.message || 'Failed to load shared user list.', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading shared users:', error);
+                noSharedUsersMsgLi.textContent = 'Error loading shared users.';
+                noSharedUsersMsgLi.style.display = 'block';
+                showGlobalNotification('Error fetching shared user list.', 'error');
+            });
+    }
+
+    function confirmRevokeAccess(noteId, sharedUserId, username) {
+        if (confirm(`Are you sure you want to revoke access to this note for ${escapeHTML(username)}?`)) {
+            revokeAccess(noteId, sharedUserId);
+        }
+    }
+
+    function revokeAccess(noteId, sharedUserId) {
+        const formData = new FormData();
+        formData.append('note_id', noteId);
+        formData.append('shared_user_id', sharedUserId);
+
+        fetch('../php/dashboard.php?action=revoke_note_access', { method: 'POST', body: formData})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showGlobalNotification(data.message || 'Access revoked.', 'success');
+                    loadSharedWithUsers(noteId); // Refresh the list in the modal
+                    loadInitialData(); // Refresh main note list to remove shared indicator if needed (though it won't for others)
+                } else {
+                    showGlobalNotification(data.message || 'Failed to revoke access.', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error revoking access:', error);
+                showGlobalNotification('An error occurred while revoking access.', 'error');
+            });
     }
 
 
@@ -961,150 +1016,36 @@ document.addEventListener('DOMContentLoaded', function() {
     function escapeHTML(str) {
         if (str === null || str === undefined) return '';
         return String(str).replace(/[&<>"']/g, function (match) {
-            return {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#39;'
-            }[match];
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match];
         });
     }
 
-    // --- Start the application ---
+    function clearFormErrors(formElement) {
+        if (!formElement) return;
+        const errorMessages = formElement.querySelectorAll('.error-message');
+        errorMessages.forEach(el => el.textContent = '');
+    }
+
     initializeDashboard();
 });
 
-// --- Global Notification Function ---
 let notificationTimeout;
 function showGlobalNotification(message, type = 'info', duration = 3000) {
     const notificationElement = document.getElementById('globalNotification');
     if (!notificationElement) return;
-
-    clearTimeout(notificationTimeout); // Clear existing timeout
-
+    clearTimeout(notificationTimeout);
     notificationElement.textContent = message;
-    notificationElement.className = 'global-notification'; // Reset classes
-    notificationElement.classList.add(type); // 'success', 'error', or 'info'
-
-    // Adjust top if fixed header exists (like .app-header)
+    notificationElement.className = 'global-notification';
+    notificationElement.classList.add(type);
     const header = document.querySelector('.app-header');
     if (header && getComputedStyle(header).position === 'fixed') {
         notificationElement.style.top = `${header.offsetHeight}px`;
     } else {
         notificationElement.style.top = '0px';
     }
-
     notificationElement.style.display = 'block';
-
     notificationTimeout = setTimeout(() => {
         notificationElement.style.display = 'none';
-        notificationElement.style.top = '0px'; // Reset top for next time
+        notificationElement.style.top = '0px';
     }, duration);
 }
-
-
-// Add to php/dashboard.php for new actions:
-// get_note_content, update_note, delete_note, create_folder, (get_tags - if not in initial)
-
-// Example for get_note_content in php/dashboard.php
-/*
-    if ($_GET['action'] === 'get_note_content' && isset($_GET['id'])) {
-        $note_id = $_GET['id'];
-        try {
-            $stmt = $pdo->prepare("SELECT id, title, content, folder_id, created_at, updated_at FROM notes WHERE id = ? AND user_id = ?");
-            $stmt->execute([$note_id, $user_id]);
-            $note = $stmt->fetch();
-            if ($note) {
-                echo json_encode(['success' => true, 'note' => $note]);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Note not found or access denied.']);
-            }
-        } catch (PDOException $e) {
-            log_error("Error fetching note content: " . $e->getMessage(), __FILE__, __LINE__);
-            echo json_encode(['success' => false, 'message' => 'Database error fetching note.']);
-        }
-        exit;
-    }
-*/
-
-// Example for update_note in php/dashboard.php
-/*
-    if ($_GET['action'] === 'update_note' && isset($_GET['id']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $note_id = $_GET['id'];
-        $title = $_POST['title'] ?? 'Untitled Note';
-        $content = $_POST['content'] ?? '';
-        // $folder_id = $_POST['folder_id'] ?? null; // Handle folder update if applicable
-
-        try {
-            $stmt = $pdo->prepare("UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?");
-            if ($stmt->execute([$title, $content, $note_id, $user_id])) {
-                if ($stmt->rowCount() > 0) {
-                    echo json_encode(['success' => true, 'message' => 'Note updated successfully.']);
-                } else {
-                    echo json_encode(['success' => false, 'message' => 'Note not found or no changes made.']);
-                }
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Failed to update note.']);
-            }
-        } catch (PDOException $e) {
-            log_error("Error updating note: " . $e->getMessage(), __FILE__, __LINE__);
-            echo json_encode(['success' => false, 'message' => 'Database error updating note.']);
-        }
-        exit;
-    }
-*/
-
-// Example for delete_note in php/dashboard.php
-/*
-    if ($_GET['action'] === 'delete_note' && isset($_GET['id']) && $_SERVER['REQUEST_METHOD'] === 'POST') { // Or use DELETE method
-        $note_id = $_GET['id'];
-        try {
-            $stmt = $pdo->prepare("DELETE FROM notes WHERE id = ? AND user_id = ?");
-            if ($stmt->execute([$note_id, $user_id])) {
-                if ($stmt->rowCount() > 0) {
-                    echo json_encode(['success' => true, 'message' => 'Note deleted successfully.']);
-                } else {
-                    echo json_encode(['success' => false, 'message' => 'Note not found or already deleted.']);
-                }
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Failed to delete note.']);
-            }
-        } catch (PDOException $e) {
-            log_error("Error deleting note: " . $e->getMessage(), __FILE__, __LINE__);
-            echo json_encode(['success' => false, 'message' => 'Database error deleting note.']);
-        }
-        exit;
-    }
-*/
-
-// Example for create_folder in php/dashboard.php
-/*
-    if ($_GET['action'] === 'create_folder' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $folder_name = trim($_POST['name'] ?? '');
-        if (empty($folder_name)) {
-            echo json_encode(['success' => false, 'message' => 'Folder name cannot be empty.']);
-            exit;
-        }
-        try {
-            // Check if folder with same name already exists for this user
-            $stmt_check = $pdo->prepare("SELECT id FROM folders WHERE user_id = ? AND name = ?");
-            $stmt_check->execute([$user_id, $folder_name]);
-            if ($stmt_check->fetch()) {
-                echo json_encode(['success' => false, 'message' => 'A folder with this name already exists.']);
-                exit;
-            }
-
-            $stmt = $pdo->prepare("INSERT INTO folders (user_id, name) VALUES (?, ?)");
-            if ($stmt->execute([$user_id, $folder_name])) {
-                echo json_encode(['success' => true, 'message' => 'Folder created successfully.', 'folder_id' => $pdo->lastInsertId()]);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Failed to create folder.']);
-            }
-        } catch (PDOException $e) {
-            log_error("Error creating folder: " . $e->getMessage(), __FILE__, __LINE__);
-            echo json_encode(['success' => false, 'message' => 'Database error creating folder.']);
-        }
-        exit;
-    }
-*/

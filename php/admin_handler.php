@@ -74,6 +74,97 @@ try {
             }
             break;
 
+        case 'upload_site_asset':
+            if (!isset($_FILES['asset_file']) || !isset($_POST['asset_type'])) {
+                echo json_encode(['success' => false, 'message' => 'Missing file or asset type.']);
+                break;
+            }
+
+            $asset_file = $_FILES['asset_file'];
+            $asset_type = $_POST['asset_type']; // 'logo' or 'favicon'
+
+            if ($asset_file['error'] !== UPLOAD_ERR_OK) {
+                echo json_encode(['success' => false, 'message' => 'File upload error: ' . $asset_file['error']]);
+                break;
+            }
+
+            $allowed_logo_types = ['image/png', 'image/jpeg', 'image/gif'];
+            $allowed_favicon_types = ['image/x-icon', 'image/vnd.microsoft.icon', 'image/png'];
+            $max_size = 2 * 1024 * 1024; // 2MB
+
+            $file_type = mime_content_type($asset_file['tmp_name']);
+            $file_size = $asset_file['size'];
+
+            $is_valid_type = false;
+            $db_key_to_update = '';
+
+            if ($asset_type === 'logo') {
+                if (in_array($file_type, $allowed_logo_types)) $is_valid_type = true;
+                $db_key_to_update = 'logo_url';
+            } elseif ($asset_type === 'favicon') {
+                if (in_array($file_type, $allowed_favicon_types)) $is_valid_type = true;
+                $db_key_to_update = 'favicon_url';
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Invalid asset type specified.']);
+                break;
+            }
+
+            if (!$is_valid_type) {
+                echo json_encode(['success' => false, 'message' => "Invalid file type for $asset_type: $file_type."]);
+                break;
+            }
+            if ($file_size > $max_size) {
+                echo json_encode(['success' => false, 'message' => 'File is too large (max 2MB).']);
+                break;
+            }
+
+            // Define upload directory (relative to script location or absolute path)
+            // IMPORTANT: Ensure this directory exists and is writable by the web server.
+            // Path is relative to the *project root* for the URL, but relative to *this script* for move_uploaded_file.
+            // $_SERVER['DOCUMENT_ROOT'] might be useful if available and configured correctly.
+            // For simplicity, assuming 'assets/uploads/' is at the project root.
+            $upload_dir_relative_to_script = '../../assets/uploads/'; // If php is in php/
+            $upload_dir_for_url = '/assets/uploads/';
+
+
+            if (!is_dir($upload_dir_relative_to_script)) {
+                 // Attempt to create if it doesn't exist (may fail due to permissions)
+                if (!mkdir($upload_dir_relative_to_script, 0755, true)) {
+                    log_error("Admin: Upload directory $upload_dir_relative_to_script does not exist and could not be created.", __FILE__, __LINE__);
+                    echo json_encode(['success' => false, 'message' => 'Upload directory issue. Please contact admin.']);
+                    break;
+                }
+            }
+            if (!is_writable($upload_dir_relative_to_script)) {
+                log_error("Admin: Upload directory $upload_dir_relative_to_script is not writable.", __FILE__, __LINE__);
+                echo json_encode(['success' => false, 'message' => 'Upload directory is not writable. Please contact admin.']);
+                break;
+            }
+
+
+            $original_filename = basename($asset_file['name']);
+            $sanitized_filename = preg_replace("/[^a-zA-Z0-9\._-]/", "", $original_filename);
+            $file_extension = pathinfo($sanitized_filename, PATHINFO_EXTENSION);
+            $new_filename = $asset_type . '_' . time() . '.' . $file_extension;
+            $destination_path_on_server = $upload_dir_relative_to_script . $new_filename;
+            $url_path_for_db = $upload_dir_for_url . $new_filename;
+
+            if (move_uploaded_file($asset_file['tmp_name'], $destination_path_on_server)) {
+                // Update database
+                $stmt_update_db = $pdo->prepare("UPDATE admin_settings SET setting_value = ? WHERE setting_key = ?");
+                if ($stmt_update_db->execute([$url_path_for_db, $db_key_to_update])) {
+                    echo json_encode(['success' => true, 'message' => ucfirst($asset_type) . ' uploaded successfully.', 'url' => $url_path_for_db, 'asset_type' => $asset_type]);
+                } else {
+                    log_error("Admin: Failed to update $db_key_to_update in database after file upload.", __FILE__, __LINE__);
+                    unlink($destination_path_on_server); // Remove uploaded file if DB update fails
+                    echo json_encode(['success' => false, 'message' => 'File uploaded but failed to update database.']);
+                }
+            } else {
+                log_error("Admin: Failed to move uploaded file to $destination_path_on_server.", __FILE__, __LINE__);
+                echo json_encode(['success' => false, 'message' => 'Failed to save uploaded file.']);
+            }
+            break;
+
         case 'trigger_password_reset':
             // Requires: user_id (from POST)
             $user_id_to_reset = (int)($_POST['user_id'] ?? 0);

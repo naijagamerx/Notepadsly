@@ -63,7 +63,7 @@
                 <header class="section-header">
                     <h2>Site Settings</h2>
                 </header>
-                <form id="siteSettingsForm">
+                <form id="siteSettingsForm" enctype="multipart/form-data">
                     <fieldset>
                         <legend>General Settings</legend>
                         <div class="form-group">
@@ -71,12 +71,14 @@
                             <input type="text" id="settingSiteName" name="settings[site_name]">
                         </div>
                         <div class="form-group">
-                            <label for="settingLogoUrl">Logo URL</label>
-                            <input type="url" id="settingLogoUrl" name="settings[logo_url]" placeholder="https://example.com/logo.png">
+                            <label for="settingLogoFile">Upload New Logo</label>
+                            <input type="file" id="settingLogoFile" name="logo_file" accept="image/png, image/jpeg, image/gif">
+                            <small>Current Logo URL: <span id="currentLogoUrlDisplay">N/A</span></small>
                         </div>
                         <div class="form-group">
-                            <label for="settingFaviconUrl">Favicon URL</label>
-                            <input type="url" id="settingFaviconUrl" name="settings[favicon_url]" placeholder="https://example.com/favicon.ico">
+                            <label for="settingFaviconFile">Upload New Favicon</label>
+                            <input type="file" id="settingFaviconFile" name="favicon_file" accept="image/x-icon, image/png, image/vnd.microsoft.icon">
+                             <small>Current Favicon URL: <span id="currentFaviconUrlDisplay">N/A</span></small>
                         </div>
                     </fieldset>
 

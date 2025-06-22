@@ -128,16 +128,14 @@
                     <label for="shareWithUserInput">Share with (Username or Email):</label>
                     <input type="text" id="shareWithUserInput" name="share_with_user" required>
                 </div>
-                <!-- For Phase 1, permission is 'read' by default, no UI needed yet -->
-                <!-- <div class="form-group">
-                    <label for="sharePermissionInput">Permission:</label>
-                    <select id="sharePermissionInput" name="permission">
-                        <option value="read" selected>Read-Only</option>
-                        <option value="edit">Edit</option>
-                    </select>
-                </div> -->
-                <button type="submit" class="button-primary">Share Note</button>
+                <button type="submit" class="button-primary">Share With User</button>
             </form>
+            <hr>
+            <h4>Currently Shared With:</h4>
+            <ul id="currentlySharedWithList" class="currently-shared-list">
+                <!-- JS will populate this: <li>Username (permission) <button>Revoke</button></li> -->
+                <li style="display:none;" id="noSharedUsersMsg">Not shared with anyone yet.</li>
+            </ul>
         </div>
     </div>
 
@@ -149,9 +147,10 @@
                 <!-- Folders will be populated here by JS -->
             </select>
             <div class="note-actions">
-                <button id="saveNoteBtn">Save</button>
-                <button id="deleteNoteBtn">Delete</button>
-                <button id="shareNoteBtn">Share</button>
+                <button id="saveNoteBtn" title="Save Note">Save</button>
+                <button id="deleteNoteBtn" title="Delete Note">Delete</button>
+                <button id="shareNoteBtn" title="Share Note">Share</button>
+                <button id="downloadNoteBtn" title="Download Note">&#11015;</button> <!-- Down arrow icon -->
             </div>
         </div>
                 <div class="toolbar" id="noteEditorToolbar">

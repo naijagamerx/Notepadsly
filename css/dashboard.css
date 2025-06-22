@@ -562,6 +562,36 @@
     border-left: 3px solid #0056b3;
 }
 
+/* Styles for "Currently Shared With" list in Share Modal */
+.currently-shared-list {
+    list-style: none;
+    padding: 0;
+    margin-top: 0.5rem;
+    max-height: 150px; /* Or as desired */
+    overflow-y: auto;
+}
+.currently-shared-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.2rem;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9em;
+}
+.currently-shared-list li:last-child {
+    border-bottom: none;
+}
+.currently-shared-list .revoke-share-btn {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.85em;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+.currently-shared-list .revoke-share-btn:hover {
+    background-color: #f1b0b7;
+}
+
 
 /* App Footer (for mobile menu) */
 .app-footer {

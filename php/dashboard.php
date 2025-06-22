@@ -101,7 +101,139 @@ if (isset($_GET['action']) && $_GET['action'] === 'sync_note_tags' && $_SERVER['
     exit;
 }
 
+// --- Download Note Action ---
+if (isset($_GET['action']) && $_GET['action'] === 'download_note' && isset($_GET['id'])) {
+    $note_id_to_download = (int)$_GET['id'];
+    if ($note_id_to_download <= 0) {
+        // Or redirect to an error page / dashboard with error message
+        header("HTTP/1.1 400 Bad Request");
+        echo "Invalid Note ID.";
+        exit;
+    }
+
+    $pdo = getDBConnection();
+    try {
+        // Check if user owns the note OR it's shared with them
+        $stmt_check_access = $pdo->prepare("
+            SELECT n.title, n.content
+            FROM notes n
+            LEFT JOIN shared_notes sn ON n.id = sn.note_id
+            WHERE n.id = ? AND (n.user_id = ? OR sn.shared_with_user_id = ?)
+            LIMIT 1
+        ");
+        $stmt_check_access->execute([$note_id_to_download, $user_id, $user_id]);
+        $note = $stmt_check_access->fetch(PDO::FETCH_ASSOC);
+
+        if ($note) {
+            $filename_title = preg_replace('/[^a-z0-9_\-\s\.]/i', '', $note['title']); // Sanitize title for filename
+            $filename_title = preg_replace('/\s+/', '_', $filename_title); // Replace spaces with underscores
+            if (empty($filename_title)) {
+                $filename_title = 'note';
+            }
+            $filename = $filename_title . ".txt";
+
+            header('Content-Type: text/plain; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            // header('Content-Length: ' . strlen($note['content'])); // Optional
+            header('Pragma: no-cache');
+            header('Expires: 0');
+
+            echo $note['content'];
+        } else {
+            header("HTTP/1.1 404 Not Found");
+            // echo "Note not found or access denied."; // Or redirect
+            // For a direct download link, a redirect might be better if an error occurs before headers are sent
+            log_error("Attempt to download note ID $note_id_to_download failed (not found or no access for user ID $user_id).", __FILE__, __LINE__);
+            // Redirect to dashboard if note not found / no access
+            header("Location: /dashboard?error=download_failed");
+        }
+    } catch (PDOException $e) {
+        log_error("PDOException while downloading note ID $note_id_to_download: " . $e->getMessage(), __FILE__, __LINE__);
+        header("HTTP/1.1 500 Internal Server Error");
+        // echo "Error downloading note."; // Or redirect
+        header("Location: /dashboard?error=download_error");
+    }
+    exit;
+}
+
 // --- Note Sharing Actions ---
+
+if (isset($_GET['action']) && $_GET['action'] === 'get_shared_with_users' && isset($_GET['note_id'])) {
+    header('Content-Type: application/json');
+    $note_id_to_check = (int)$_GET['note_id'];
+
+    if ($note_id_to_check <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Invalid Note ID.']);
+        exit;
+    }
+    $pdo = getDBConnection();
+    try {
+        // First, ensure the current user owns the note
+        $stmt_owner_check = $pdo->prepare("SELECT id FROM notes WHERE id = ? AND user_id = ?");
+        $stmt_owner_check->execute([$note_id_to_check, $user_id]);
+        if (!$stmt_owner_check->fetch()) {
+            echo json_encode(['success' => false, 'message' => 'You do not own this note or note not found.']);
+            exit;
+        }
+
+        // Fetch users with whom this note is shared
+        $stmt_shared_users = $pdo->prepare("
+            SELECT u.id as user_id, u.username, sn.permission
+            FROM shared_notes sn
+            JOIN users u ON sn.shared_with_user_id = u.id
+            WHERE sn.note_id = ?
+        ");
+        $stmt_shared_users->execute([$note_id_to_check]);
+        $shared_users = $stmt_shared_users->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success' => true, 'shared_users' => $shared_users]);
+
+    } catch (PDOException $e) {
+        log_error("PDOException while getting shared users for note ID $note_id_to_check: " . $e->getMessage(), __FILE__, __LINE__);
+        echo json_encode(['success' => false, 'message' => 'Database error.']);
+    }
+    exit;
+}
+
+if (isset($_GET['action']) && $_GET['action'] === 'revoke_note_access' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    $note_id_to_revoke_from = (int)($_POST['note_id'] ?? 0);
+    $shared_user_id_to_revoke = (int)($_POST['shared_user_id'] ?? 0);
+
+    if ($note_id_to_revoke_from <= 0 || $shared_user_id_to_revoke <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Note ID and Shared User ID are required.']);
+        exit;
+    }
+    $pdo = getDBConnection();
+    try {
+        // Ensure the current user owns the note
+        $stmt_owner_check = $pdo->prepare("SELECT id FROM notes WHERE id = ? AND user_id = ?");
+        $stmt_owner_check->execute([$note_id_to_revoke_from, $user_id]);
+        if (!$stmt_owner_check->fetch()) {
+            echo json_encode(['success' => false, 'message' => 'You do not own this note or note not found.']);
+            exit;
+        }
+
+        // Revoke access
+        $stmt_revoke = $pdo->prepare("DELETE FROM shared_notes WHERE note_id = ? AND shared_with_user_id = ? AND shared_by_user_id = ?");
+        // We also check shared_by_user_id to ensure the original sharer is revoking.
+        if ($stmt_revoke->execute([$note_id_to_revoke_from, $shared_user_id_to_revoke, $user_id])) {
+            if ($stmt_revoke->rowCount() > 0) {
+                echo json_encode(['success' => true, 'message' => 'Access revoked successfully.']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Share record not found or already revoked.']);
+            }
+        } else {
+            log_error("Failed to revoke access for note ID $note_id_to_revoke_from from user ID $shared_user_id_to_revoke", __FILE__, __LINE__);
+            echo json_encode(['success' => false, 'message' => 'Failed to revoke access due to a server error.']);
+        }
+    } catch (PDOException $e) {
+        log_error("PDOException while revoking note access: " . $e->getMessage(), __FILE__, __LINE__);
+        echo json_encode(['success' => false, 'message' => 'Database error.']);
+    }
+    exit;
+}
+
+
 if (isset($_GET['action']) && $_GET['action'] === 'share_note' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
     $note_id_to_share = (int)($_POST['note_id'] ?? 0);
