@@ -1,0 +1,431 @@
+Okay, this is a comprehensive project! Let's break this down into a highly detailed prompt suitable for guiding the development process.
+
+Project Title: Notepadsly - Secure Web-Based Notepad Application
+
+1. Project Overview & Objective:
+Develop "Notepadsly," a web-based notepad application with a design inspired by iOS Notes (light yellow background, ruled lines). The application must provide secure, encrypted note-taking for individual users, with robust admin management capabilities. Users will be able to create, organize, share, and download notes. The system must be built using HTML, CSS, JavaScript (for frontend) and PHP (for backend), running on a MAMP local environment and deployable to Hostinger shared hosting.
+
+2. Core Technologies & Environment:
+
+Frontend: HTML5, CSS3, JavaScript (ES6+)
+Backend: PHP 8.0 or higher
+Database: MySQL (MariaDB via MAMP)
+Localhost Database Name: Notepad
+Username: root
+Password: root (for MAMP development)
+CSS Framework: Bootstrap 5.3 or higher
+Local Development Server: MAMP (or MAMP PRO)
+Deployment Target: Hostinger Shared Hosting
+Version Control (Recommended): Git
+3. General Design & UX Principles:
+
+iOS Notes Aesthetic:
+Main note-taking area: Light yellow background (#FFFFE0 or similar).
+Ruled lines: Subtle horizontal lines within the note content area.
+Layout (Desktop):
+Left Sidebar: Navigation (Folders, All Notes, Tags list).
+Middle Panel: Note list (titles, snippets, dates) for the selected folder/tag.
+Right Panel: Note preview/editor for the selected note.
+Layout (Mobile):
+App-like experience.
+Single-column views (e.g., view folders, then view notes in a folder, then view/edit a single note).
+Footer Icon Menu: Key actions like New Note, Folders, Search, Settings.
+Responsiveness: Fully responsive design using Bootstrap.
+Clarity & Simplicity: Intuitive user interface, easy to navigate.
+4. Database Schema (SQL - Notepad database):
+
+Generated sql
+-- users table
+CREATE TABLE `users` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `username` VARCHAR(50) NOT NULL UNIQUE,
+  `email` VARCHAR(100) NOT NULL UNIQUE,
+  `password_hash` VARCHAR(255) NOT NULL, -- Hashed password
+  `encryption_key_salt` VARCHAR(255) NOT NULL, -- Salt for deriving user-specific encryption key
+  `is_admin` BOOLEAN DEFAULT FALSE,
+  `two_factor_secret` VARCHAR(255) NULL, -- For 2FA
+  `is_active` BOOLEAN DEFAULT TRUE,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `last_login_at` TIMESTAMP NULL,
+  `preferred_storage` ENUM('database', 'localstorage') DEFAULT 'database'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- folders table
+CREATE TABLE `folders` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `name` VARCHAR(100) NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- notes table
+CREATE TABLE `notes` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `folder_id` INT NULL, -- Nullable if note is not in a folder (e.g., "All Notes")
+  `title` VARCHAR(255) NOT NULL, -- Encrypted
+  `content` LONGTEXT NOT NULL, -- Encrypted content (plain text data before encryption)
+  `iv` VARCHAR(32) NOT NULL, -- Initialization Vector for AES encryption (hex encoded)
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`folder_id`) REFERENCES `folders`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- tags table
+CREATE TABLE `tags` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL, -- Tags are user-specific
+  `name` VARCHAR(50) NOT NULL,
+  UNIQUE (`user_id`, `name`), -- User can't have duplicate tag names
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- note_tags (junction table for many-to-many relationship between notes and tags)
+CREATE TABLE `note_tags` (
+  `note_id` INT NOT NULL,
+  `tag_id` INT NOT NULL,
+  PRIMARY KEY (`note_id`, `tag_id`),
+  FOREIGN KEY (`note_id`) REFERENCES `notes`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`tag_id`) REFERENCES `tags`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- shared_notes table
+CREATE TABLE `shared_notes` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `note_id` INT NOT NULL,
+  `shared_by_user_id` INT NOT NULL,
+  `share_token` VARCHAR(64) NOT NULL UNIQUE, -- For link-based sharing
+  `access_type` ENUM('readonly') DEFAULT 'readonly', -- Future: 'readwrite'
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `expires_at` TIMESTAMP NULL, -- Optional expiry for shared links
+  FOREIGN KEY (`note_id`) REFERENCES `notes`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`shared_by_user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- admin_settings table
+CREATE TABLE `admin_settings` (
+  `setting_key` VARCHAR(50) PRIMARY KEY,
+  `setting_value` TEXT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Pre-populate admin_settings with default keys
+INSERT INTO `admin_settings` (`setting_key`) VALUES
+('site_logo'), ('site_favicon'), ('smtp_host'), ('smtp_port'), ('smtp_username'),
+('smtp_password'), ('smtp_encryption'), ('smtp_from_email'), ('smtp_from_name'),
+('allow_registration'), ('default_2fa_enabled');
+
+-- error_logs table
+CREATE TABLE `error_logs` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `error_level` VARCHAR(20),
+  `message` TEXT,
+  `file` VARCHAR(255),
+  `line` INT,
+  `context` TEXT NULL, -- e.g., stack trace, request data
+  `user_id` INT NULL, -- If error is user-specific
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- activity_logs table (for user and admin actions)
+CREATE TABLE `activity_logs` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NULL, -- Can be NULL for system actions
+  `action` VARCHAR(255) NOT NULL, -- e.g., 'user_login', 'note_created', 'admin_deleted_user'
+  `details` TEXT NULL, -- JSON encoded details if needed
+  `ip_address` VARCHAR(45) NULL,
+  `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+content_copy
+download
+Use code with caution.
+SQL
+5. Folder & File Structure (Strict Adherence Required):
+Each "page" or distinct functional unit for both user and admin areas must have its own folder. Inside that folder, there will be:
+
+An .html file (for structure, if not dynamically generated by PHP).
+A .css file (for page-specific styles).
+A .js file (for page-specific client-side logic).
+A .php file (for server-side logic, data processing, and potentially HTML generation/templating).
+Example Structure:
+
+Generated code
+notepadsly/
+├── admin/
+│   ├── dashboard/
+│   │   ├── dashboard.html
+│   │   ├── dashboard.css
+│   │   ├── dashboard.js
+│   │   ├── dashboard.php
+│   ├── user_management/
+│   │   ├── user_management.html
+│   │   ├── user_management.css
+│   │   ├── user_management.js
+│   │   ├── user_management.php
+│   │   ├── add_user.php (logic for adding)
+│   │   ├── edit_user.php (logic for editing)
+│   │   └── delete_user.php (logic for deleting)
+│   ├── settings/
+│   │   ├── settings.html
+│   │   ├── settings.css
+│   │   ├── settings.js
+│   │   ├── settings.php (handles appearance, SMTP, security settings)
+│   ├── logs/
+│   │   ├── error_logs.php
+│   │   ├── activity_logs.php
+│   │   ├── logs.css
+│   │   └── logs.js
+│   └── login/ (admin login - can be separate or part of main login with role check)
+│       ├── login.html
+│       ├── login.css
+│       ├── login.js
+│       ├── login.php
+├── app/ (User-facing application)
+│   ├── dashboard/ (main user interface after login)
+│   │   ├── dashboard.html
+│   │   ├── dashboard.css
+│   │   ├── dashboard.js
+│   │   ├── dashboard.php
+│   ├── notes/
+│   │   ├── create_note.php (logic)
+│   │   ├── edit_note.php (logic)
+│   │   ├── delete_note.php (logic)
+│   │   ├── share_note.php (logic)
+│   │   ├── download_note.php (logic)
+│   │   ├── notes_actions.js (JS for CRUD, sharing, etc.)
+│   ├── folders/
+│   │   ├── create_folder.php (logic)
+│   │   ├── rename_folder.php (logic)
+│   │   ├── delete_folder.php (logic)
+│   │   ├── folders_actions.js
+│   ├── profile/ (user profile settings, 2FA, storage pref)
+│   │   ├── profile.html
+│   │   ├── profile.css
+│   │   ├── profile.js
+│   │   ├── profile.php
+│   ├── support/
+│   │   ├── support.html
+│   │   ├── support.css
+│   │   ├── support.js
+│   │   ├── support.php (form to submit ticket/query)
+├── auth/ (User authentication)
+│   ├── login/
+│   │   ├── login.html
+│   │   ├── login.css
+│   │   ├── login.js
+│   │   ├── login.php
+│   ├── register/
+│   │   ├── register.html
+│   │   ├── register.css
+│   │   ├── register.js
+│   │   ├── register.php
+│   ├── forgot_password/
+│   │   ├── forgot_password.html
+│   │   ├── forgot_password.css
+│   │   ├── forgot_password.js
+│   │   ├── forgot_password.php
+│   ├── reset_password/
+│   │   ├── reset_password.html
+│   │   ├── reset_password.css
+│   │   ├── reset_password.js
+│   │   ├── reset_password.php
+├── assets/
+│   ├── css/ (global styles, bootstrap custom)
+│   │   ├── style.css
+│   │   └── theme_ios.css (iOS specific theming)
+│   ├── js/ (global JS, libraries)
+│   │   ├── main.js
+│   │   ├── crypto.js (for client-side encryption/decryption functions)
+│   ├── images/ (logos, favicons, etc.)
+│   ├── fonts/
+├── includes/ (Common PHP files)
+│   ├── db_connect.php (Database connection)
+│   ├── functions.php (Global PHP functions - e.g., encryption, validation)
+│   ├── header.php (Common HTML head, nav if static)
+│   ├── footer.php (Common HTML footer)
+│   ├── session_check.php (Checks if user is logged in)
+│   ├── admin_session_check.php (Checks if admin is logged in)
+├── public/ (Files accessible directly, e.g. shared note view)
+│   ├── view_shared_note/
+│   │   ├── view_shared_note.php (displays shared note using token)
+│   │   ├── view_shared_note.css
+│   │   └── view_shared_note.js
+├── test/ (All test files - unit tests, integration tests)
+│   ├── phpunit.xml (if using PHPUnit)
+│   ├── UserTest.php
+│   ├── NoteTest.php
+├── vendor/ (Composer dependencies, e.g., for PHPMailer, 2FA library)
+├── .htaccess (For URL rewriting, security headers)
+├── composer.json (PHP dependencies)
+├── index.php (Main entry point, routes to login or dashboard)
+content_copy
+download
+Use code with caution.
+6. User Features (app/ folder):
+
+Authentication (auth/ folder):
+User Registration: Username, Email, Password. Email verification (SMTP needed).
+User Login: Username/Email and Password.
+Password Reset: "Forgot Password" functionality (email-based).
+2FA/OTP: Option to enable via user profile (e.g., Google Authenticator).
+Dashboard (dashboard/ folder):
+Left Sidebar:
+"New Note" button.
+Folders List: Click to show notes in that folder. CRUD operations for folders.
+"All Notes" view.
+Tags List: Click to filter notes by tag.
+Middle Panel (Note List):
+Displays notes for the selected folder/tag or all notes.
+Shows Note Title, snippet of content, last modified date.
+Search bar to filter notes in the current view.
+Sort options (date, title).
+Right Panel (Note Editor/Preview):
+Displays full content of the selected note.
+Textarea for editing: Light yellow background with lines.
+Formatting Toolbar:
+Bold. (Implement via Markdown **bold** or simple tags if converted to HTML for display but stored as plain text/Markdown)
+Copy text.
+Paste text.
+Auto-save functionality (on interval or on blur).
+Note Management (notes/ folder for backend logic, dashboard.js for frontend logic):
+Create Note: Plain text input. No rich text editor to prevent XSS.
+Edit Note.
+Delete Note.
+Move Note to Folder: Drag and drop or context menu option.
+Add/Remove Tags to Note.
+Note Content:
+Strictly Plain Text: No HTML, no scripts. Any formatting (like bold) should be handled via Markdown-like syntax that is then rendered safely, or through specific non-HTML tags managed by the application. This is critical to prevent code execution.
+Supported file uploads for importing content: .md (Markdown), .txt, .doc (convert to plain text on upload).
+Sharing Notes (notes/share_note.php, dashboard.js):
+Generate a unique, shareable link for a note (read-only access).
+Barcode Sharing: Generate a QR code for the shareable link.
+Option to set an expiry date for the shared link.
+Download Notes (notes/download_note.php):
+Download note as .txt file.
+Download note as .md file (if Markdown syntax was used).
+Storage Preference (profile/ folder):
+User can choose to primarily use Database storage (default, syncs across devices) or Local Storage (browser-specific, faster, offline capable but not synced).
+If Local Storage is chosen, provide clear warnings about data not being backed up or synced.
+Mechanism to sync Local Storage to Database if user switches. (This is complex, consider a simplified "upload from local to DB" if full sync is too much).
+Support (support/ folder):
+Simple contact form or ticketing system integration placeholder.
+FAQ section.
+Profile Management (profile/ folder):
+Change password.
+Update email.
+Enable/Disable 2FA.
+Manage storage preference.
+7. Admin Features (admin/ folder):
+
+Admin Dashboard (admin/dashboard/ folder):
+Overview: Stats like total users, total notes, active users, recent registrations.
+Links to other admin sections.
+User Management (admin/user_management/ folder):
+View all users (list with username, email, active status, last login).
+Add User (manually create a user account).
+Edit User (update details, reset password, (de)activate account, grant/revoke admin).
+Delete User (soft delete or hard delete with confirmation).
+Export User List (CSV/JSON).
+Content Control:
+Admin CANNOT see user note content due to encryption.
+Admin can see metadata (note titles if not encrypted, creation dates, user ID).
+Admin can delete notes/folders if necessary (e.g., for abuse, with clear logging).
+Appearance Settings (admin/settings/ folder, settings.php):
+Upload Site Logo.
+Upload Favicon.
+Basic theme color adjustments (if any beyond iOS yellow).
+General Settings (admin/settings/ folder, settings.php):
+Site Name.
+Enable/Disable new user registrations.
+Default user settings (e.g., default storage preference).
+SMTP Settings (admin/settings/ folder, settings.php):
+Configure SMTP server, port, username, password, encryption (TLS/SSL), "From" email/name for system emails (registration, password reset, share notifications).
+Security Settings (admin/settings/ folder, settings.php):
+Enable/Disable 2FA requirement for admins.
+Configure OTP parameters (if applicable).
+View/Manage active sessions (advanced).
+IP Whitelisting/Blacklisting for admin access (advanced).
+Database Management (admin/settings/ or dedicated folder):
+Admin option to export (backup) the entire database (SQL dump). Requires appropriate server permissions.
+View Logs (admin/logs/ folder):
+Access to error_logs table (formatted view).
+Access to activity_logs table (formatted view with filters).
+Support Management (if ticketing implemented):
+View and respond to user support requests.
+8. Security Considerations:
+
+Note Encryption (CRITICAL):
+Client-Side Encryption/Decryption:
+Notes (title and content) must be encrypted on the client-side (in JavaScript using SubtleCrypto API - AES-GCM recommended) before being sent to the server.
+The encryption key should be derived from the user's password using a strong Key Derivation Function (KDF) like Argon2id or PBKDF2. This key is never stored on the server.
+The user's password hash (for login) is stored on the server, derived using Argon2id or bcrypt.
+When the user logs in, their password can be used to re-derive the encryption key client-side for decrypting notes.
+Each note should use a unique Initialization Vector (IV), stored alongside the encrypted note.
+This ensures the admin (or anyone with database access) cannot read note contents.
+Password Hashing: Use password_hash() and password_verify() in PHP (Argon2id if available, otherwise bcrypt).
+Input Sanitization & Validation: Sanitize all user inputs (client and server-side) to prevent XSS, SQL Injection. Use prepared statements for all DB queries.
+Output Encoding: Properly encode any user-generated content displayed on the page to prevent XSS.
+CSRF Protection: Implement CSRF tokens for all form submissions that change state.
+Session Management: Secure session handling (HttpOnly cookies, regenerate session ID on login).
+HTTPS: Enforce HTTPS in production.
+Two-Factor Authentication (2FA):
+For users (optional, user-configurable).
+For admins (configurable, can be made mandatory).
+Use TOTP (Time-based One-Time Password) algorithm (e.g., Google Authenticator compatible).
+Rate Limiting: On login attempts, password reset requests.
+Security Headers: Implement security headers like CSP, X-Frame-Options, X-Content-Type-Options, HSTS.
+.htaccess Configuration:
+Deny access to sensitive folders/files (e.g., includes/, vendor/).
+URL rewriting for cleaner URLs.
+9. Error Handling & Logging:
+
+Custom Error Handler: Implement a global error handler in PHP (set_error_handler, set_exception_handler).
+Error Logging:
+Log all significant errors (PHP errors, database errors, exceptions) to the error_logs table and/or a file.
+Include timestamp, error message, file, line number, stack trace, relevant context (e.g., user ID, request data).
+User-Friendly Error Messages: Display generic, user-friendly error messages to the user. Do not expose detailed error information on the frontend.
+Activity Logging: Log important user and admin actions to the activity_logs table (e.g., login, logout, note creation/deletion, user creation/deletion, settings changes).
+10. Development Constraints & Best Practices:
+
+File Size Limit: No single PHP, CSS, or JS file should exceed 1000 lines (encourages modularity).
+Code Comments: Well-commented code, especially for complex logic and public APIs/functions.
+PHP Standards: Follow PSR standards where applicable (e.g., PSR-12 for coding style).
+Modularity: Design functions and modules to be reusable.
+AJAX for Dynamic Content: Use AJAX for operations like saving notes, loading note lists, managing folders without full page reloads. Responses should typically be JSON.
+Testing (test/ folder):
+Create basic test scripts or stubs for key functionalities.
+PHPUnit for backend testing if feasible.
+Manual testing checklists for user stories.
+11. Deployment (Hostinger Shared Hosting):
+
+Ensure compatibility with PHP version and MySQL.
+Configure database credentials for production.
+Set up cron jobs if needed (e.g., for cleaning up expired shared links).
+Optimize for shared hosting (e.g., minimize resource usage, leverage caching).
+12. Company Branding:
+
+Company Name: Notepadsly
+Use this name in titles, footers, etc.
+Deliverables for each page/module as specified in folder structure:
+
+[page_name].html: Semantic HTML structure.
+[page_name].css: Specific styles for that page, augmenting global styles.
+[page_name].js: Client-side JavaScript for interactivity, AJAX calls, DOM manipulation for that specific page.
+[page_name].php: Server-side PHP logic. This file will:
+Handle form submissions.
+Interact with the database (via included DB connection and functions).
+Perform business logic.
+Manage sessions.
+Often, it will include or require the corresponding .html file as a template, or dynamically generate HTML output. Alternatively, it might act as an API endpoint returning JSON to be consumed by [page_name].js.
+Clarifications & Assumptions for the AI (if this prompt is fed to one):
+
+Client-Side Encryption is Key: The success of "admin can't see notes" hinges on robust client-side encryption. The encryption_key_salt in the users table is to make key derivation unique per user even if they somehow chose the same password as another user (though the primary derivation happens client-side from the raw password). The actual note encryption/decryption key is never sent to the server.
+Plain Text Storage: Even with Markdown-like syntax, the core storage in the content field (before encryption) should be plain text. Rendering (e.g., bolding **text** to <b>text</b> or <strong>text</strong>) happens client-side upon display.
+PHP File Role: PHP files associated with a "page" are the primary controllers for that page's backend logic. They may also handle rendering the HTML structure, possibly by including the .html file as a template.
+Focus on Core Functionality: Given the scope, prioritize core note-taking, user management, and security. Advanced features can be stubs initially.
+This detailed prompt should provide a solid foundation for developing Notepadsly. Remember to tackle it module by module. Good luck!
