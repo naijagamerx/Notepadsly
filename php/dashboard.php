@@ -4,7 +4,100 @@ require_once 'config.php'; // Includes session_start() and DB connection functio
 // --- Authentication Check ---
 // If the user is not logged in, redirect to the login page.
 if (!isset($_SESSION['user_id'])) {
-    header("Location: ../html/index.html"); // Adjust path as necessary
+    header("Location: /login"); // Updated to extension-less URL
+    exit;
+}
+
+// --- Tag Management Actions ---
+if (isset($_GET['action']) && $_GET['action'] === 'sync_note_tags' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    $note_id = (int)($_POST['note_id'] ?? 0);
+    $tag_names_json = $_POST['tags'] ?? '[]'; // Expecting a JSON string array of tag names
+    $tag_names = json_decode($tag_names_json, true);
+
+    if ($note_id <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Invalid note ID.']);
+        exit;
+    }
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($tag_names)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid tags format. Expected JSON array of names.']);
+        exit;
+    }
+
+    // Ensure the note belongs to the user
+    $pdo = getDBConnection();
+    $stmt_note_check = $pdo->prepare("SELECT id FROM notes WHERE id = ? AND user_id = ?");
+    $stmt_note_check->execute([$note_id, $user_id]);
+    if (!$stmt_note_check->fetch()) {
+        echo json_encode(['success' => false, 'message' => 'Note not found or access denied.']);
+        exit;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        // 1. Process incoming tag names: find or create tags, get their IDs
+        $final_tag_ids = [];
+        if (!empty($tag_names)) {
+            foreach ($tag_names as $name) {
+                $name = trim(strtolower($name)); // Normalize: lowercase, trim
+                if (empty($name) || strlen($name) > 50) continue; // Basic validation
+
+                // Find tag
+                $stmt_find_tag = $pdo->prepare("SELECT id FROM tags WHERE name = ?");
+                $stmt_find_tag->execute([$name]);
+                $tag = $stmt_find_tag->fetch();
+
+                if ($tag) {
+                    $final_tag_ids[] = $tag['id'];
+                } else {
+                    // Create tag
+                    $stmt_create_tag = $pdo->prepare("INSERT INTO tags (name) VALUES (?)");
+                    $stmt_create_tag->execute([$name]);
+                    $final_tag_ids[] = $pdo->lastInsertId();
+                }
+            }
+        }
+        $final_tag_ids = array_unique($final_tag_ids); // Ensure unique IDs
+
+        // 2. Get current tag associations for the note
+        $stmt_current_tags = $pdo->prepare("SELECT tag_id FROM note_tags WHERE note_id = ?");
+        $stmt_current_tags->execute([$note_id]);
+        $current_tag_ids = $stmt_current_tags->fetchAll(PDO::FETCH_COLUMN);
+
+        // 3. Determine tags to add and remove
+        $tags_to_add = array_diff($final_tag_ids, $current_tag_ids);
+        $tags_to_remove = array_diff($current_tag_ids, $final_tag_ids);
+
+        // 4. Add new associations
+        if (!empty($tags_to_add)) {
+            $stmt_add_tag = $pdo->prepare("INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)");
+            foreach ($tags_to_add as $tag_id_to_add) {
+                $stmt_add_tag->execute([$note_id, $tag_id_to_add]);
+            }
+        }
+
+        // 5. Remove old associations
+        if (!empty($tags_to_remove)) {
+            $placeholders_remove = implode(',', array_fill(0, count($tags_to_remove), '?'));
+            $stmt_remove_tag = $pdo->prepare("DELETE FROM note_tags WHERE note_id = ? AND tag_id IN ($placeholders_remove)");
+            $params_remove = array_merge([$note_id], $tags_to_remove);
+            $stmt_remove_tag->execute($params_remove);
+        }
+
+        $pdo->commit();
+        // Fetch the updated list of tags for the note to send back
+        $stmt_updated_note_tags = $pdo->prepare("SELECT t.id, t.name FROM tags t JOIN note_tags nt ON t.id = nt.tag_id WHERE nt.note_id = ? ORDER BY t.name ASC");
+        $stmt_updated_note_tags->execute([$note_id]);
+        $updated_tags_for_note = $stmt_updated_note_tags->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'message' => 'Tags updated successfully.', 'tags' => $updated_tags_for_note]);
+
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        log_error("Error syncing tags for note ID $note_id: " . $e->getMessage(), __FILE__, __LINE__);
+        echo json_encode(['success' => false, 'message' => 'Database error syncing tags.']);
+    }
     exit;
 }
 
@@ -80,10 +173,21 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_note_content' && isset($_
     $note_id = (int)$_GET['id'];
     $pdo = getDBConnection();
     try {
-        $stmt = $pdo->prepare("SELECT id, title, content, folder_id, created_at, updated_at FROM notes WHERE id = ? AND user_id = ?");
-        $stmt->execute([$note_id, $user_id]);
-        $note = $stmt->fetch();
+        // Fetch note details
+        $stmt_note = $pdo->prepare("SELECT id, title, content, folder_id, created_at, updated_at FROM notes WHERE id = ? AND user_id = ?");
+        $stmt_note->execute([$note_id, $user_id]);
+        $note = $stmt_note->fetch(PDO::FETCH_ASSOC);
+
         if ($note) {
+            // Fetch tags for this note
+            $stmt_tags = $pdo->prepare("
+                SELECT t.id, t.name
+                FROM tags t
+                JOIN note_tags nt ON t.id = nt.tag_id
+                WHERE nt.note_id = ?
+            ");
+            $stmt_tags->execute([$note_id]);
+            $note['tags'] = $stmt_tags->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(['success' => true, 'note' => $note]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Note not found or access denied.']);
@@ -357,20 +461,52 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete_folder' && isset($_POS
 // It might be useful to have a function here to get all initial dashboard data
 function getInitialDashboardData($pdo, $user_id) {
     $data = [];
-    // Fetch notes
+
+    // Fetch all notes for the user
     $stmt_notes = $pdo->prepare("SELECT id, title, LEFT(content, 100) as snippet, updated_at, folder_id FROM notes WHERE user_id = ? ORDER BY updated_at DESC");
     $stmt_notes->execute([$user_id]);
-    $data['notes'] = $stmt_notes->fetchAll();
+    $notes = $stmt_notes->fetchAll(PDO::FETCH_ASSOC);
+    $note_ids = array_column($notes, 'id');
 
-    // Fetch folders
+    // Fetch all tags associated with these notes
+    $note_tags_map = [];
+    if (!empty($note_ids)) {
+        $placeholders = implode(',', array_fill(0, count($note_ids), '?'));
+        $stmt_note_tags = $pdo->prepare("
+            SELECT nt.note_id, t.id as tag_id, t.name as tag_name
+            FROM note_tags nt
+            JOIN tags t ON nt.tag_id = t.id
+            WHERE nt.note_id IN ($placeholders)
+        ");
+        $stmt_note_tags->execute($note_ids);
+        while ($row = $stmt_note_tags->fetch(PDO::FETCH_ASSOC)) {
+            $note_tags_map[$row['note_id']][] = ['id' => $row['tag_id'], 'name' => $row['tag_name']];
+        }
+    }
+
+    // Attach tags to each note
+    foreach ($notes as &$note) { // Use reference to modify array directly
+        $note['tags'] = $note_tags_map[$note['id']] ?? [];
+    }
+    unset($note); // Unset reference
+    $data['notes'] = $notes;
+
+    // Fetch all folders for the user
     $stmt_folders = $pdo->prepare("SELECT id, name FROM folders WHERE user_id = ? ORDER BY name ASC");
     $stmt_folders->execute([$user_id]);
-    $data['folders'] = $stmt_folders->fetchAll();
+    $data['folders'] = $stmt_folders->fetchAll(PDO::FETCH_ASSOC);
 
-    // Fetch tags (unique tags used by the user)
-    $stmt_tags = $pdo->prepare("SELECT DISTINCT t.id, t.name FROM tags t JOIN note_tags nt ON t.id = nt.tag_id JOIN notes n ON nt.note_id = n.id WHERE n.user_id = ? ORDER BY t.name ASC");
-    $stmt_tags->execute([$user_id]);
-    $data['tags'] = $stmt_tags->fetchAll();
+    // Fetch all unique tags used by the user (for the sidebar tag list)
+    $stmt_all_user_tags = $pdo->prepare("
+        SELECT DISTINCT t.id, t.name
+        FROM tags t
+        JOIN note_tags nt ON t.id = nt.tag_id
+        JOIN notes n ON nt.note_id = n.id
+        WHERE n.user_id = ?
+        ORDER BY t.name ASC
+    ");
+    $stmt_all_user_tags->execute([$user_id]);
+    $data['tags'] = $stmt_all_user_tags->fetchAll(PDO::FETCH_ASSOC);
 
     return $data;
 }

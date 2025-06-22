@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $response['success'] = true;
                 $response['message'] = 'Login successful! Redirecting...';
                 // Include a redirect URL or let frontend handle it
-                $response['redirect_url'] = 'dashboard.html'; // Or php/dashboard.php if it handles display
+                $response['redirect_url'] = '/dashboard'; // Updated to extension-less URL
 
             } else {
                 // Invalid password

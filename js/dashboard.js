@@ -31,13 +31,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const noteEditorPanel = document.querySelector('.note-editor-panel');
     const editorContentWrapper = noteEditorPanel ? noteEditorPanel.querySelector('.content-wrapper') : null;
+    const noteTagsInput = document.getElementById('noteTagsInput');
+    const currentNoteTagsDisplay = document.getElementById('currentNoteTagsDisplay');
+    const noteLastUpdated = document.getElementById('noteLastUpdated');
+
 
     // --- State Variables ---
     let currentNoteId = null;
+    let currentNoteTags = []; // Holds array of {id, name} for the currently edited note
     let currentUser = null;
     let allNotes = [];
     let allFolders = [];
-    let allTags = [];
+    let allUserUniqueTags = []; // For the sidebar tag list (renamed from allTags for clarity)
 
     // --- Initialization ---
     function initializeDashboard() {
@@ -58,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     // Add Admin Panel link if user is admin
                     if (data.role === 'admin' && adminLinkContainer) {
-                        adminLinkContainer.innerHTML = `<a href="../html/admin_dashboard.html" class="button button-secondary">Admin Panel</a>`;
+                        adminLinkContainer.innerHTML = `<a href="/admin_dashboard" class="button button-secondary">Admin Panel</a>`;
                     }
                 } else if (!data.success) {
                     // Handle cases where user info couldn't be fetched (e.g. session expired)
@@ -82,10 +87,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (result.success) {
                     allNotes = result.data.notes || [];
                     allFolders = result.data.folders || [];
-                    allTags = result.data.tags || [];
+                    allUserUniqueTags = result.data.tags || []; // Updated variable name
 
                     renderFolders(allFolders);
-                    renderTags(allTags);
+                    renderTagsSidebar(allUserUniqueTags); // Renamed for clarity
                     renderNoteList(allNotes); // Initially render all notes
 
                     // Select the first note if available
@@ -156,15 +161,41 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function renderTags(tags) {
+    function renderTagsSidebar(tags) { // Renamed from renderTags
         if (!tagListUl) return;
         tagListUl.innerHTML = ''; // Clear existing
         tags.forEach(tag => {
             const li = document.createElement('li');
-            li.innerHTML = `<a href="#" data-tag-id="${tag.id}">#${escapeHTML(tag.name)}</a>`;
+            // Note: The data-tag-id here is the tag's actual ID from the 'tags' table
+            li.innerHTML = `<a href="#" data-tag-id="${tag.id}" title="Filter by tag: ${escapeHTML(tag.name)}">#${escapeHTML(tag.name)}</a>`;
             tagListUl.appendChild(li);
         });
     }
+
+    function renderCurrentNoteTags() {
+        if (!currentNoteTagsDisplay) return;
+        currentNoteTagsDisplay.innerHTML = '';
+        currentNoteTags.forEach(tag => {
+            const pill = document.createElement('span');
+            pill.classList.add('tag-pill');
+            pill.textContent = escapeHTML(tag.name);
+            pill.dataset.tagId = tag.id;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.classList.add('remove-tag-btn');
+            removeBtn.innerHTML = '&times;';
+            removeBtn.title = `Remove tag: ${escapeHTML(tag.name)}`;
+            removeBtn.addEventListener('click', () => {
+                // Remove from currentNoteTags array
+                currentNoteTags = currentNoteTags.filter(t => t.id !== tag.id);
+                renderCurrentNoteTags(); // Re-render pills
+                // Note: This only updates UI; actual removal from DB happens on note save.
+            });
+            pill.appendChild(removeBtn);
+            currentNoteTagsDisplay.appendChild(pill);
+        });
+    }
+
 
     function renderNoteList(notesToRender) {
         if (!noteListUl) return;
@@ -256,9 +287,14 @@ document.addEventListener('DOMContentLoaded', function() {
             if (noteFolderSelect) {
                 noteFolderSelect.value = noteData.folder_id || ""; // Set folder dropdown
             }
-            // Update metadata (tags, last updated) if available in noteData
-            // const metadataDisplay = document.querySelector('.note-metadata span');
-            // if (metadataDisplay) metadataDisplay.textContent = `Last updated: ${new Date(noteData.updated_at).toLocaleString()}`;
+            currentNoteTags = noteData.tags || [];
+            renderCurrentNoteTags();
+            if (noteTagsInput) noteTagsInput.value = ''; // Clear the input field
+
+            if (noteLastUpdated) {
+                noteLastUpdated.textContent = `Last updated: ${new Date(noteData.updated_at).toLocaleString()}`;
+            }
+
         } else { // No note selected or new note state
             noteEditorPanel.classList.add('empty');
             editorContentWrapper.style.display = 'none'; // Hide content wrapper
@@ -267,9 +303,10 @@ document.addEventListener('DOMContentLoaded', function() {
             noteContentTextarea.value = '';
             if (noteFolderSelect) noteFolderSelect.value = ""; // Reset folder dropdown
             currentNoteId = null;
-            // Clear metadata
-            // const metadataDisplay = document.querySelector('.note-metadata span');
-            // if (metadataDisplay) metadataDisplay.textContent = '';
+            currentNoteTags = [];
+            renderCurrentNoteTags();
+            if (noteTagsInput) noteTagsInput.value = '';
+            if (noteLastUpdated) noteLastUpdated.textContent = 'Last updated: N/A';
         }
     }
 
@@ -280,14 +317,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const title = noteTitleInput.value.trim();
         const content = noteContentTextarea.value;
         const folderId = noteFolderSelect.value;
-        let url;
 
+        // Get tag names from the currentNoteTags array (these are the ones visually present)
+        const tagNamesToSend = currentNoteTags.map(tag => tag.name);
+
+        let url;
         const formData = new FormData();
         formData.append('title', title);
         formData.append('content', content);
         if (folderId) {
             formData.append('folder_id', folderId);
         }
+        formData.append('tags', JSON.stringify(tagNamesToSend)); // Send as JSON string array
 
         if (currentNoteId) { // Update existing note
             // url = `../php/dashboard.php?action=update_note&id=${currentNoteId}`; // ID in GET is not how PHP is structured
@@ -302,20 +343,27 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(result => {
                 if (result.success) {
                     showGlobalNotification(result.message || 'Note saved!', 'success');
-                    loadInitialData();
-                    if (result.note_id) {
-                        currentNoteId = result.note_id;
-                         // Optionally, automatically select the new/updated note
-                        setTimeout(() => {
-                            setActiveNoteListItem(currentNoteId);
-                            loadNoteIntoEditor(currentNoteId); // This will also set the folder dropdown
-                        }, 100); // Small delay for list to re-render
-                    } else if (currentNoteId) {
-                        // If updating, re-select and load to reflect changes
-                         setTimeout(() => {
-                            setActiveNoteListItem(currentNoteId);
-                            loadNoteIntoEditor(currentNoteId);
-                        }, 100);
+
+                    // If a new note was created, the result will contain its ID
+                    const savedNoteId = result.note_id || currentNoteId;
+
+                    // After saving, we need to sync tags if it's an existing note,
+                    // or if it's a new note and tags were added before the first save.
+                    // The backend `create_note` doesn't handle tags yet, so we'll call sync_note_tags.
+                    // The backend `update_note` also doesn't handle tags yet based on current PHP.
+                    // The `sync_note_tags` PHP action is now the sole way to update tags.
+                    // So, after note create/update, call sync.
+
+                    if (savedNoteId) { // Ensure we have a note ID
+                        syncTagsForNote(savedNoteId, tagNamesToSend).then(() => {
+                            loadInitialData(); // Reload all data to reflect note & tag changes
+                            setTimeout(() => { // Re-select and load the note
+                                setActiveNoteListItem(savedNoteId);
+                                loadNoteIntoEditor(savedNoteId);
+                            }, 100);
+                        });
+                    } else { // Should not happen if save was successful
+                        loadInitialData();
                     }
                 } else {
                     showGlobalNotification(result.message || 'Failed to save note.', 'error');
@@ -326,6 +374,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 showGlobalNotification('An error occurred while saving the note.', 'error');
             });
     }
+
+    function syncTagsForNote(noteId, tagsArray) {
+        const formData = new FormData();
+        formData.append('note_id', noteId);
+        formData.append('tags', JSON.stringify(tagsArray)); // Send array of tag names
+
+        return fetch('../php/dashboard.php?action=sync_note_tags', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update currentNoteTags with the definitive list from server
+                currentNoteTags = data.tags || [];
+                renderCurrentNoteTags();
+                // Potentially update sidebar tag list if new global tags were created
+                // loadInitialData() called by saveCurrentNote will handle this.
+                showGlobalNotification(data.message || 'Tags synced!', 'success');
+            } else {
+                showGlobalNotification(data.message || 'Failed to sync tags.', 'error');
+            }
+            return data; // Return data for promise chaining
+        })
+        .catch(error => {
+            console.error('Error syncing tags:', error);
+            showGlobalNotification('An error occurred while syncing tags.', 'error');
+            throw error; // Re-throw for promise chain
+        });
+    }
+
 
     function deleteCurrentNote() {
         if (!currentNoteId) {
@@ -447,16 +526,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (tagListUl) {
             tagListUl.addEventListener('click', (e) => {
-                if (e.target.tagName === 'A' && e.target.dataset.tagId) {
+                if (e.target.closest('a[data-tag-id]')) {
                     e.preventDefault();
-                    const tagId = e.target.dataset.tagId;
-                    // Implement tag filtering logic
-                    // setActiveTagListItem(tagId);
-                    // filterNotesByTag(tagId);
-                    console.log("Filter by tag:", tagId);
+                    const tagId = e.target.closest('a[data-tag-id]').dataset.tagId;
+                    const tagName = e.target.closest('a[data-tag-id]').textContent.substring(1); // Remove #
+
+                    // Basic filtering:
+                    // setActiveTagListItem(tagId); // Need to implement this if we want visual feedback on active tag
+                    filterNotesByTag(tagName); // Filter by name for simplicity now
+                    console.log("Filter by tag ID:", tagId, "Name:", tagName);
                 }
             });
         }
+
+        if (noteTagsInput) {
+            noteTagsInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    const tagName = noteTagsInput.value.trim().toLowerCase();
+                    if (tagName) {
+                        // Check if tag already exists in currentNoteTags (by name)
+                        if (!currentNoteTags.some(t => t.name === tagName)) {
+                            // For UI, we add it with a temporary/null ID if it's new,
+                            // or find its ID if it's a known global tag.
+                            // The backend sync will handle actual ID creation/lookup.
+                            currentNoteTags.push({ id: null, name: tagName }); // id will be resolved by backend
+                            renderCurrentNoteTags();
+                        }
+                        noteTagsInput.value = '';
+                    }
+                }
+            });
+        }
+
 
         if (searchNotesInput) {
             searchNotesInput.addEventListener('input', (e) => {
@@ -558,16 +660,25 @@ document.addEventListener('DOMContentLoaded', function() {
     function filterNotesBySearch(searchTerm) {
         const lowerSearchTerm = searchTerm.toLowerCase();
         const filteredNotes = allNotes.filter(note => {
-            return (note.title && note.title.toLowerCase().includes(lowerSearchTerm)) ||
-                   (note.content && note.content.toLowerCase().includes(lowerSearchTerm)); // Search content if available
+            const titleMatch = note.title && note.title.toLowerCase().includes(lowerSearchTerm);
+            const contentMatch = note.snippet && note.snippet.toLowerCase().includes(lowerSearchTerm); // Search snippet for performance
+            // const fullContentMatch = note.content && note.content.toLowerCase().includes(lowerSearchTerm); // More thorough
+            const tagMatch = note.tags && note.tags.some(tag => tag.name.toLowerCase().includes(lowerSearchTerm));
+            return titleMatch || contentMatch || tagMatch;
         });
         renderNoteList(filteredNotes);
-        if (filteredNotes.length > 0) {
-            // updateEditorState(null);
-            // setActiveNoteListItem(null);
-        } else {
-            updateEditorState(null);
-        }
+        updateEditorState(null); // Clear editor when searching
+        setActiveNoteListItem(null);
+    }
+
+    function filterNotesByTag(tagName) {
+        const lowerTagName = tagName.toLowerCase();
+        const filteredNotes = allNotes.filter(note => {
+            return note.tags && note.tags.some(tag => tag.name.toLowerCase() === lowerTagName);
+        });
+        renderNoteList(filteredNotes);
+        updateEditorState(null); // Clear editor when filtering by tag
+        setActiveNoteListItem(null);
     }
 
     // --- Utility Functions ---

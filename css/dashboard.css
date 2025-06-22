@@ -419,6 +419,78 @@
     flex-shrink: 0; /* Prevent footer from shrinking */
 }
 
+.note-editor-footer {
+    padding: 0.75rem 1.5rem;
+    background-color: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0; /* Ensure footer doesn't shrink */
+    min-height: 50px; /* Give it some minimum height */
+}
+
+.tags-input-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem; /* Space between label, input, and displayed tags */
+    flex-grow: 1; /* Allow it to take available space */
+    margin-right: 1rem; /* Space before metadata */
+}
+.tags-input-container label {
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 0; /* Align with input */
+}
+#noteTagsInput {
+    /* flex-grow: 1; */ /* Let tags-display-area define width more */
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9em;
+    min-width: 150px; /* Minimum width for typing */
+}
+.tags-display-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem; /* Space between pills */
+    /* margin-left: 0.5rem; */ /* Managed by gap in parent */
+    max-height: 40px; /* Limit height if many tags, might need scroll or different UI */
+    overflow-y: auto; /* Scroll if too many tags */
+}
+.tag-pill {
+    background-color: #007bff; /* Primary color for tags */
+    color: white;
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px; /* More pill-like */
+    font-size: 0.8em;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+}
+.tag-pill .remove-tag-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.7);
+    margin-left: 0.4rem;
+    cursor: pointer;
+    font-size: 1.1em;
+    padding: 0;
+    line-height: 1;
+}
+.tag-pill .remove-tag-btn:hover {
+    color: white;
+}
+
+.note-metadata {
+    /* Styles for note-metadata are now minimal as it's part of the flex footer */
+    font-size: 0.8rem;
+    color: #777;
+    text-align: right;
+    white-space: nowrap; /* Prevent metadata from wrapping if possible */
+}
+
 
 /* App Footer (for mobile menu) */
 .app-footer {

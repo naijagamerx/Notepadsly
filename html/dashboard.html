@@ -135,9 +135,17 @@
             <button>B</button> <button>I</button> <button>U</button>
         </div>
         <textarea id="noteContentTextarea" placeholder="Start writing your note here...">Milk, Eggs, Bread, Cheese, Apples.</textarea>
-        <div class="note-metadata">
-            <span>Last updated: Oct 25, 2023</span> |
-            <span>Tags: <a href="#">#groceries</a></span>
+        <div class="note-editor-footer">
+            <div class="tags-input-container">
+                <label for="noteTagsInput">Tags:</label>
+                <input type="text" id="noteTagsInput" placeholder="Add tags, comma separated...">
+                <div id="currentNoteTagsDisplay" class="tags-display-area">
+                    <!-- Tags will be displayed here as pills -->
+                </div>
+            </div>
+            <div class="note-metadata">
+                 <span id="noteLastUpdated">Last updated: Oct 25, 2023</span>
+            </div>
         </div>
     </div>
 

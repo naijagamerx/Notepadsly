@@ -1,0 +1,56 @@
+# Enable URL Rewriting
+RewriteEngine On
+
+# Determine the RewriteBase automatically if not at root
+# This helps if the app is in a subdirectory.
+# However, for simplicity and common shared hosting, often a fixed base is okay
+# or it's handled by the server config itself.
+# For now, let's assume it could be in a subdirectory.
+# RewriteCond %{REQUEST_URI} ^/(.+)/[^/]+\.html$
+# RewriteRule ^(.+)$ - [E=REWRITEBASE:/%1]
+
+# Remove .html extension from files in the /html directory
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.html -f
+RewriteRule ^(.*)$ html/$1.html [L]
+
+# Specific rule for the root index (login page)
+# If someone requests the bare domain, or /index
+RewriteRule ^(index)?$ html/index.html [L]
+RewriteRule ^login/?$ html/index.html [L] # Alias for login
+
+# Rules for other specific top-level "pages"
+# These assume the html files are in the /html/ subdirectory
+RewriteRule ^dashboard/?$ html/dashboard.html [L]
+RewriteRule ^admin_dashboard/?$ html/admin_dashboard.html [L]
+
+
+# --- Important considerations for assets (CSS, JS, images) ---
+# If assets are referenced with relative paths like ../css/style.css from html/dashboard.html,
+# and the URL becomes /dashboard, the browser will request /css/style.css.
+# We need to ensure these requests correctly map to the actual css/js folders.
+
+# Option 1: If assets are requested from the root (e.g. /css/style.css)
+# and your folders are indeed css/, js/, assets/ at the root, this should be fine.
+# The rules above are for .html files, not assets.
+
+# Option 2: If relative paths from the "new" URL structure cause issues,
+# you might need to ensure your HTML uses root-relative paths for assets (e.g., /css/style.css)
+# or adjust RewriteBase and rules carefully.
+
+# For now, assuming asset paths will resolve correctly from the root.
+
+# --- PHP scripts ---
+# PHP scripts in php/ directory are typically accessed directly and don't need rewriting
+# unless you want to make them look like clean URLs too (e.g. /api/login instead of /php/login.php)
+# That's out of scope for just removing .html extensions.
+
+# Prevent directory listing
+Options -Indexes
+
+# Optional: Force HTTPS (Uncomment if SSL is configured)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Default charset
+AddDefaultCharset UTF-8

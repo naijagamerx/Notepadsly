@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     showMessage(loginMessage, data.message, true);
                     // Redirect after a short delay
                     setTimeout(() => {
-                        window.location.href = data.redirect_url || '../html/dashboard.html'; // Fallback if not provided
+                        window.location.href = data.redirect_url || '/dashboard'; // Updated to extension-less URL
                     }, 1000);
                 } else {
                     showMessage(loginMessage, data.message || 'Login failed. Please check your credentials.', false);
