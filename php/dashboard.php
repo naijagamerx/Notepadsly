@@ -560,15 +560,29 @@ if (isset($_GET['action']) && $_GET['action'] === 'update_note' && isset($_POST[
     try {
         // Check if user owns the note OR has 'edit' permission
         $stmt_access_check = $pdo->prepare("
-            SELECT n.id
+            SELECT n.id, n.updated_at as server_updated_at
             FROM notes n
             LEFT JOIN shared_notes sn ON n.id = sn.note_id AND sn.shared_with_user_id = :current_user_id
             WHERE n.id = :note_id AND (n.user_id = :current_user_id OR sn.permission = 'edit')
         ");
         $stmt_access_check->execute([':note_id' => $note_id, ':current_user_id' => $user_id]);
-        if (!$stmt_access_check->fetch()) {
+        $note_access_data = $stmt_access_check->fetch(PDO::FETCH_ASSOC);
+
+        if (!$note_access_data) {
             echo json_encode(['success' => false, 'message' => 'Access denied or note not found.']);
             exit;
+        }
+
+        // Basic Conflict Detection
+        $last_known_server_timestamp_str = $_POST['last_known_server_timestamp'] ?? null;
+        if ($last_known_server_timestamp_str) {
+            $server_timestamp = strtotime($note_access_data['server_updated_at']);
+            $client_known_timestamp = strtotime($last_known_server_timestamp_str);
+            // Allow a small grace period (e.g., a few seconds) for minor clock differences if needed, but exact match is stricter.
+            if ($server_timestamp > $client_known_timestamp) {
+                 echo json_encode(['success' => false, 'conflict' => true, 'message' => 'Note has been updated on the server since you last loaded it.']);
+                 exit;
+            }
         }
 
         // If user is not the owner, they cannot change the folder_id (for simplicity in this phase)

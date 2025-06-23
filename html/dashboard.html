@@ -148,14 +148,25 @@
                         <option value="edit">Edit</option>
                     </select>
                 </div>
-                <button type="submit" class="button-primary">Share / Update Permission</button>
+                <button type="submit" class="button-primary">Add Share / Update New User</button>
             </form>
             <hr>
             <h4>Currently Shared With:</h4>
-            <ul id="currentlySharedWithList" class="currently-shared-list">
-                <!-- JS will populate this: <li>Username (permission) <button>Revoke</button></li> -->
-                <li style="display:none;" id="noSharedUsersMsg">Not shared with anyone yet.</li>
-            </ul>
+            <div id="currentlySharedWithListContainer"> <!-- Wrapper for list and potential messages -->
+                <ul id="currentlySharedWithList" class="currently-shared-list">
+                    <!-- JS will populate this:
+                        <li>
+                            <span>Username</span>
+                            <select class="share-permission-select-existing" data-shared-user-id="USER_ID">
+                                <option value="read">Read</option>
+                                <option value="edit">Edit</option>
+                            </select>
+                            <button class="revoke-share-btn button">Revoke</button>
+                        </li>
+                    -->
+                </ul>
+                <p style="display:none; text-align: center; margin-top:10px;" id="noSharedUsersMsg">Not shared with anyone yet.</p>
+            </div>
         </div>
     </div>
 
