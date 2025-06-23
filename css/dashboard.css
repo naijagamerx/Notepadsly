@@ -83,11 +83,10 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    /* Transition for mobile slide-in/out - will be overridden in media query for desktop */
+    /* transition: left 0.3s ease-in-out;  -- Apply only in mobile context */
 }
-.sidebar.open {
-    left: 0;
-    box-shadow: 3px 0 10px rgba(0,0,0,0.1);
-}
+/* .sidebar.open {} -- This class is used by JS for mobile */
 
 
 .sidebar-header {
@@ -117,7 +116,23 @@
     padding-left: 0.5rem;
     text-transform: uppercase;
     font-weight: 600;
+    display: flex; /* For aligning button with h3 */
+    justify-content: space-between;
+    align-items: center;
 }
+#clearTagFiltersBtn { /* Style for the clear button next to Tags H3 */
+    font-size: 0.7em;
+    margin-left: 10px;
+    padding: 3px 6px; /* Smaller padding */
+    border-radius: 3px;
+    background-color: #e9ecef;
+    color: #495057;
+    border: 1px solid #ced4da;
+}
+#clearTagFiltersBtn:hover {
+    background-color: #dee2e6;
+}
+
 
 .folder-nav ul, .tag-nav ul {
     list-style: none;
@@ -140,7 +155,7 @@
 }
 
 .folder-nav li a:hover, .tag-nav li a:hover,
-.folder-nav li.active a, .tag-nav li.active a {
+.folder-nav li.active a { /* Removed .tag-nav active style to handle with .active-filter */
     background-color: #e0e0e0;
     font-weight: 500;
 }
@@ -217,6 +232,7 @@
     display: flex;
     flex-direction: column;
     background-color: #fdfdfd;
+    height: 100%; /* Ensure it can be a flex child with scroll */
 }
 .note-list-panel .panel-header {
     padding: 0.8rem 1rem;
@@ -242,12 +258,13 @@
 }
 
 
-#noteList {
+ul#noteList { /* More specific selector for note list scroll */
     list-style: none;
     padding: 0;
     margin: 0;
     overflow-y: auto;
     flex-grow: 1;
+    height: 100%; /* This combined with parent height allows scrolling */
 }
 .note-item {
     padding: 0.8rem 1rem;
@@ -294,9 +311,9 @@
 }
 .note-item .shared-indicator { color: #007bff; }
 .note-item .offline-indicator { color: #fd7e14; }
-.note-item .sync-indicator.syncing { color: #ffc107; } /* Yellow */
-.note-item .sync-indicator.synced { color: #28a745; } /* Green */
-.note-item .sync-indicator.error { color: #dc3545; } /* Red */
+.note-item .sync-indicator.syncing { color: #ffc107; }
+.note-item .sync-indicator.synced { color: #28a745; }
+.note-item .sync-indicator.error { color: #dc3545; }
 
 
 .note-item.shared-note-item.active {
@@ -313,6 +330,7 @@
     background-color: #fffef7;
     padding: 0;
     position: relative;
+    height: 100%; /* Ensure it can be a flex child with scroll */
 }
 .note-editor-panel.empty {
     align-items: center;
@@ -324,7 +342,7 @@
 .note-editor-panel .content-wrapper {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: 100%; /* Important for textarea scroll */
 }
 .note-editor-panel .panel-header {
     padding: 0.8rem 1.5rem;
@@ -404,6 +422,7 @@
     background-image: linear-gradient(to bottom, transparent calc(1.7em - 1px), #e0e0e0 1.7em);
     background-size: 100% 1.7em;
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    overflow-y: auto; /* Ensure textarea itself can scroll */
 }
 
 .note-editor-footer {
@@ -589,7 +608,7 @@
 .modal-content input[type="text"],
 .modal-content input[type="email"],
 .modal-content input[type="password"],
-.modal-content select { /* Added select */
+.modal-content select {
     width: 100%;
     padding: 10px;
     margin-bottom: 15px;
@@ -635,7 +654,7 @@
     background-color: #f8d7da;
     border-color: #f5c6cb;
     color: #721c24;
-    margin-left: 5px; /* Space from select */
+    margin-left: 5px;
 }
 .currently-shared-list .revoke-share-btn:hover { background-color: #f1b0b7; }
 .currently-shared-list .share-permission-select-existing {
@@ -643,7 +662,7 @@
     font-size: 0.85em;
     border-radius: 3px;
     border: 1px solid #ccc;
-    margin: 0 5px; /* Space around the select */
+    margin: 0 5px;
 }
 
 
@@ -656,36 +675,57 @@
 
 
     .app-container {
-        margin-bottom: 55px;
+        margin-top: 60px; /* Header height */
+        margin-bottom: 55px; /* Footer menu height */
         height: calc(100vh - 60px - 55px);
+        overflow: hidden; /* Prevent body scroll, panels handle their own */
     }
     .sidebar {
-        position: absolute;
+        position: fixed; /* Changed from absolute for better context */
         left: -260px;
-        top: 60px;
-        height: calc(100vh - 60px - 55px);
+        top: 60px; /* Below header */
+        height: calc(100% - 60px - 55px); /* Full height between header and footer */
         z-index: 1001;
-        transition: left 0.3s ease-in-out;
+        transition: left 0.3s ease-in-out; /* Smooth slide */
         border-bottom: none;
     }
     .sidebar.open { left: 0; box-shadow: 3px 0 10px rgba(0,0,0,0.1); }
 
-    .main-content { flex-direction: column; }
-    .note-list-panel { width: 100%; height: 100%; border-right: none; }
-    .note-editor-panel { width: 100%; height: 100%; position: absolute; top: 60px; left:0; z-index: 1000; }
+    .main-content {
+        flex-direction: column;
+        height: 100%; /* Fill available space in app-container */
+        width: 100%;
+        position: relative; /* For positioning panels */
+    }
+    .note-list-panel {
+        width: 100%;
+        height: 100%; /* Take full height of main-content */
+        border-right: none;
+        /* display: flex; Will be controlled by view classes */
+    }
+    .note-editor-panel {
+        width: 100%;
+        height: 100%; /* Take full height of main-content */
+        /* display: none; Will be controlled by view classes */
+        position: absolute; /* Allow stacking, JS controls visibility */
+        top: 0;
+        left: 0;
+    }
 
     /* Mobile View States */
     body.mobile-view-list .note-list-panel { display: flex; }
     body.mobile-view-list .note-editor-panel { display: none; }
-    body.mobile-view-list .sidebar { left: -260px; }
+    body.mobile-view-list .sidebar.open { left: -260px; } /* Close sidebar if list view is forced */
 
     body.mobile-view-editor .note-list-panel { display: none; }
     body.mobile-view-editor .note-editor-panel { display: flex; }
-    body.mobile-view-editor .sidebar { left: -260px; }
+    body.mobile-view-editor .sidebar.open { left: -260px; }
 
     body.mobile-view-sidebar .sidebar { left: 0; }
-    body.mobile-view-sidebar .note-list-panel { display: none; }
+    /* When sidebar is open, decide what happens to other panels */
+    body.mobile-view-sidebar .note-list-panel { display: flex; opacity: 0.3; pointer-events: none;} /* Show list dimmed under sidebar */
     body.mobile-view-sidebar .note-editor-panel { display: none; }
+
 
     .mobile-footer-menu { display: flex; }
 
