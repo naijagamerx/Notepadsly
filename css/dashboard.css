@@ -32,7 +32,7 @@
     font-size: 1.5rem;
     margin: 0;
     color: #333;
-    font-weight: 600; /* Corresponds to iOS Notes app title weight */
+    font-weight: 600;
 }
 
 .user-nav {
@@ -46,7 +46,7 @@
     color: #555;
 }
 
-.user-nav .button { /* Style for logout button */
+.user-nav .button {
     background-color: #007bff;
     color: white;
     padding: 0.5rem 1rem;
@@ -57,27 +57,40 @@
 .user-nav .button:hover {
     background-color: #0056b3;
 }
+.user-nav .button-secondary { /* For admin link */
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+.user-nav .button-secondary:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+}
 
 
 /* App Container: Holds Sidebar and Main Content */
 .app-container {
     display: flex;
     margin-top: 60px; /* Height of the fixed header */
-    height: calc(100vh - 60px); /* Full viewport height minus header */
-    background-color: #f8f8f8; /* Light background for the app area */
+    height: calc(100vh - 60px);
+    background-color: #f8f8f8;
 }
 
 /* Sidebar */
 .sidebar {
-    width: 250px; /* Fixed width for sidebar */
-    min-width: 220px; /* Minimum width */
-    background-color: #f0f0f0; /* Slightly darker than app background, iOS like */
+    width: 250px;
+    min-width: 220px;
+    background-color: #f0f0f0;
     padding: 1rem;
     border-right: 1px solid #e0e0e0;
-    overflow-y: auto; /* Scroll if content overflows */
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
 }
+.sidebar.open { /* For mobile */
+    left: 0;
+    box-shadow: 3px 0 10px rgba(0,0,0,0.1);
+}
+
 
 .sidebar-header {
     margin-bottom: 1rem;
@@ -87,7 +100,7 @@
     width: 100%;
     padding: 0.8rem;
     font-size: 1rem;
-    background-color: #ffcc00; /* iOS yellow for primary action */
+    background-color: #ffcc00;
     color: #333;
     border: none;
     border-radius: 5px;
@@ -99,13 +112,13 @@
 
 
 .folder-nav h3, .tag-nav h3 {
-    font-size: 0.85rem; /* Smaller headings for sections */
-    color: #555; /* Darker grey for better readability */
+    font-size: 0.85rem;
+    color: #555;
     margin-top: 1.5rem;
     margin-bottom: 0.5rem;
     padding-left: 0.5rem;
     text-transform: uppercase;
-    font-weight: 600; /* Slightly bolder */
+    font-weight: 600;
 }
 
 .folder-nav ul, .tag-nav ul {
@@ -115,7 +128,9 @@
 }
 
 .folder-nav li a, .tag-nav li a {
-    display: block;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 0.6rem 0.8rem;
     color: #333;
     text-decoration: none;
@@ -127,14 +142,49 @@
 }
 
 .folder-nav li a:hover, .tag-nav li a:hover,
-.folder-nav li.active a, .tag-nav li.active a { /* Target 'a' inside active 'li' */
-    background-color: #e0e0e0; /* Highlight for active/hover */
+.folder-nav li.active a, .tag-nav li.active a {
+    background-color: #e0e0e0;
     font-weight: 500;
 }
-.folder-nav li.active a { /* More specific for active folder */
-     background-color: #ffdd40; /* Lighter iOS yellow for selected folder */
+.folder-nav li.active a {
+     background-color: #ffdd40;
      color: #000;
      font-weight: 600;
+}
+.tag-nav li a.active-filter { /* For multi-tag select */
+    background-color: #0056b3;
+    color: white;
+    font-weight: 600;
+}
+.tag-nav li a.active-filter .tag-count {
+    color: #e0e0e0;
+}
+.tag-nav li a .tag-count {
+    color: #6c757d;
+    font-size: 0.9em;
+    margin-left: 4px;
+}
+
+
+.folder-item-actions {
+    display: inline-block;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+.folder-nav li:hover .folder-item-actions {
+    opacity: 1;
+}
+.folder-item-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 0.85em;
+    color: #555;
+}
+.folder-item-actions button:hover {
+    color: #000;
 }
 
 
@@ -156,31 +206,29 @@
 
 /* Main Content Area */
 .main-content {
-    flex-grow: 1; /* Takes remaining space */
-    display: flex; /* Layout for note list and editor */
-    overflow: hidden; /* Prevent app container from scrolling due to this flex container */
+    flex-grow: 1;
+    display: flex;
+    overflow: hidden;
 }
 
 /* Note List Panel */
 .note-list-panel {
-    width: 320px; /* Width of the notes list */
+    width: 320px;
     min-width: 280px;
-    border-right: 1px solid #d0d0d0; /* Separator line like iOS */
+    border-right: 1px solid #d0d0d0;
     display: flex;
     flex-direction: column;
-    background-color: #fdfdfd; /* Slightly off-white */
+    background-color: #fdfdfd;
 }
-
 .note-list-panel .panel-header {
     padding: 0.8rem 1rem;
     border-bottom: 1px solid #e0e0e0;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    min-height: 40px; /* Ensure consistent height */
-    flex-shrink: 0; /* Prevent header from shrinking */
+    min-height: 40px;
+    flex-shrink: 0;
 }
-
 .note-list-panel .panel-header h3 {
     margin: 0;
     font-size: 1.1rem;
@@ -190,9 +238,9 @@
 #searchNotes {
     padding: 0.4rem 0.6rem;
     border: 1px solid #ccc;
-    border-radius: 20px; /* Pill shape search */
+    border-radius: 20px;
     font-size: 0.9rem;
-    width: 150px; /* Adjust as needed */
+    width: 150px;
 }
 
 
@@ -200,107 +248,117 @@
     list-style: none;
     padding: 0;
     margin: 0;
-    overflow-y: auto; /* Scrollable list of notes */
+    overflow-y: auto;
     flex-grow: 1;
 }
-
 .note-item {
     padding: 0.8rem 1rem;
     border-bottom: 1px solid #e8e8e8;
     cursor: pointer;
 }
-.note-item:last-child {
-    border-bottom: none;
-}
-
-.note-item:hover {
-    background-color: #f5f5f5; /* Lighter hover */
-}
-
+.note-item:last-child { border-bottom: none; }
+.note-item:hover { background-color: #f5f5f5; }
 .note-item.active {
-    background-color: #fff9e0; /* Softer light yellow for active note */
-    border-left: 3px solid #ffd700; /* Gold/yellow accent */
-    padding-left: calc(1rem - 3px); /* Adjust padding for border */
+    background-color: #fff9e0;
+    border-left: 3px solid #ffd700;
+    padding-left: calc(1rem - 3px);
 }
-.note-item.active h4 {
-    font-weight: 600;
-}
-
-.note-item h4 { /* Note title in list */
+.note-item.active h4 { font-weight: 600; }
+.note-item h4 {
     margin: 0 0 0.25rem 0;
-    font-size: 0.95rem; /* Slightly smaller */
+    font-size: 0.95rem;
     font-weight: 500;
     color: #222;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-
-.note-item p { /* Snippet */
+.note-item p {
     margin: 0 0 0.25rem 0;
-    font-size: 0.8rem; /* Smaller snippet */
+    font-size: 0.8rem;
     color: #555;
     line-height: 1.3;
-    height: 2.6em; /* Approx 2 lines */
+    height: 2.6em;
     overflow: hidden;
-    text-overflow: ellipsis; /* Add ellipsis if snippet overflows */
+    text-overflow: ellipsis;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
 }
-
-.note-item small { /* Date */
+.note-item small {
     font-size: 0.75rem;
     color: #777;
 }
+.note-item .shared-indicator, .note-item .offline-indicator {
+    font-size: 0.75em;
+    color: #007bff;
+    margin-left: 8px;
+    font-weight: normal;
+}
+.note-item .offline-indicator { color: #fd7e14; } /* Orange for offline */
+
+.note-item.shared-note-item.active {
+    background-color: #d6eaff;
+    border-left: 3px solid #0056b3;
+}
+
 
 /* Note Editor Panel */
 .note-editor-panel {
-    flex-grow: 1; /* Takes remaining space */
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
-    background-color: #fffef7; /* Very light yellow, iOS note paper color */
+    background-color: #fffef7;
     padding: 0;
     position: relative;
 }
-.note-editor-panel.empty { /* Style when no note is selected */
+.note-editor-panel.empty {
     align-items: center;
     justify-content: center;
     color: #888;
     font-size: 1.2rem;
 }
-.note-editor-panel.empty .content-wrapper { display: none; } /* Hide normal content */
-
-
-.note-editor-panel .content-wrapper { /* Add a wrapper for when a note IS selected */
+.note-editor-panel.empty .content-wrapper { display: none; }
+.note-editor-panel .content-wrapper {
     display: flex;
     flex-direction: column;
     height: 100%;
 }
-
-
 .note-editor-panel .panel-header {
     padding: 0.8rem 1.5rem;
-    border-bottom: 1px solid #e0e0e0; /* Subtle separator */
+    border-bottom: 1px solid #e0e0e0;
     display: flex;
-    justify-content: space-between;
+    /* justify-content: space-between; -- Let items flow naturally */
     align-items: center;
-    background-color: #fdfdfd; /* Header of editor can be slightly off-white */
+    background-color: #fdfdfd;
     min-height: 40px;
-    flex-shrink: 0; /* Prevent header from shrinking */
+    flex-shrink: 0;
+    gap: 10px; /* Space between title, folder select, and actions */
 }
-
-#noteTitleInput { /* Renamed from noteTitle for clarity */
+#noteTitleInput {
     flex-grow: 1;
     border: none;
-    font-size: 1.3rem; /* Slightly smaller than before */
+    font-size: 1.3rem;
     font-weight: 600;
     padding: 0.5rem 0;
     outline: none;
     background-color: transparent;
     color: #111;
+    min-width: 100px; /* Ensure it doesn't collapse too much */
 }
-
+.note-folder-select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    /* margin-left: 10px; -- Handled by gap in parent */
+    font-size: 0.9em;
+    max-width: 180px;
+}
+.note-actions {
+    display: flex;
+    margin-left: auto; /* Push actions to the right */
+}
 .note-actions button {
     margin-left: 0.5rem;
     padding: 0.4rem 0.8rem;
@@ -310,34 +368,19 @@
     border-radius: 4px;
     cursor: pointer;
 }
-.note-actions button:hover {
-    background-color: #e0e0e0;
-}
-.note-actions #saveNoteBtn {
-    background-color: #28a745; /* Green for save */
-    color: white;
-    border-color: #28a745;
-}
-.note-actions #saveNoteBtn:hover {
-    background-color: #218838;
-}
-.note-actions #deleteNoteBtn {
-    background-color: #dc3545; /* Red for delete */
-    color: white;
-    border-color: #dc3545;
-}
-.note-actions #deleteNoteBtn:hover {
-    background-color: #c82333;
-}
+.note-actions button:hover { background-color: #e0e0e0; }
+.note-actions #saveNoteBtn { background-color: #28a745; color: white; border-color: #28a745; }
+.note-actions #saveNoteBtn:hover { background-color: #218838; }
+.note-actions #deleteNoteBtn { background-color: #dc3545; color: white; border-color: #dc3545; }
+.note-actions #deleteNoteBtn:hover { background-color: #c82333; }
 
 
 .toolbar {
     padding: 0.5rem 1.5rem;
-    background-color: #f9f9f9; /* Light grey for toolbar */
+    background-color: #f9f9f9;
     border-bottom: 1px solid #e0e0e0;
-    flex-shrink: 0; /* Prevent toolbar from shrinking */
+    flex-shrink: 0;
 }
-
 .toolbar button {
     margin-right: 0.5rem;
     padding: 0.3rem 0.6rem;
@@ -345,78 +388,22 @@
     border: 1px solid #ccc;
     border-radius: 3px;
     cursor: pointer;
+    font-weight: bold;
 }
-.toolbar button:hover {
-    background-color: #eee;
-}
+.toolbar button:hover { background-color: #eee; }
 
-#noteContentTextarea { /* Renamed for clarity */
+#noteContentTextarea {
     flex-grow: 1;
     padding: 1.5rem;
     border: none;
     outline: none;
     font-size: 1rem;
-    line-height: 1.7; /* iOS Notes has generous line height */
+    line-height: 1.7;
     background-color: transparent;
     resize: none;
-    /* Simulating lines in a notepad */
     background-image: linear-gradient(to bottom, transparent calc(1.7em - 1px), #e0e0e0 1.7em);
-    background-size: 100% 1.7em; /* Match line-height */
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; /* More standard sans-serif */
-    /* Consider 'Noteworthy' or similar for more "handwritten" feel if desired and available */
-}
-
-.note-folder-select {
-    padding: 0.4rem 0.6rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background-color: #fff;
-    margin-left: 10px; /* Spacing from title */
-    font-size: 0.9em;
-    max-width: 150px; /* Limit width */
-}
-
-
-.folder-item-actions {
-    display: inline-block; /* Changed from float: right for better control with flex */
-    margin-left: auto; /* Pushes actions to the right in a flex container */
-    opacity: 0; /* Hidden by default */
-    transition: opacity 0.2s ease-in-out;
-}
-
-.folder-nav li:hover .folder-item-actions {
-    opacity: 1; /* Show on hover */
-}
-
-.folder-item-actions button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 2px 4px;
-    font-size: 0.85em;
-    color: #555;
-}
-.folder-item-actions button:hover {
-    color: #000;
-}
-
-/* Ensure folder link and actions are in a flex container for proper alignment */
-.folder-nav li a {
-    display: flex; /* Use flex to align text and actions */
-    justify-content: space-between; /* Space between name and actions */
-    align-items: center; /* Vertically align items */
-    /* ... existing styles for folder links ... */
-}
-
-
-.note-metadata {
-    padding: 0.5rem 1.5rem;
-    font-size: 0.8rem;
-    color: #777;
-    border-top: 1px solid #e0e0e0;
-    background-color: #f9f9f9; /* Footer of editor can match toolbar */
-    text-align: right;
-    flex-shrink: 0; /* Prevent footer from shrinking */
+    background-size: 100% 1.7em;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 .note-editor-footer {
@@ -426,43 +413,69 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-shrink: 0; /* Ensure footer doesn't shrink */
-    min-height: 50px; /* Give it some minimum height */
+    flex-shrink: 0;
+    min-height: 50px;
 }
-
 .tags-input-container {
     display: flex;
     align-items: center;
-    gap: 0.5rem; /* Space between label, input, and displayed tags */
-    flex-grow: 1; /* Allow it to take available space */
-    margin-right: 1rem; /* Space before metadata */
+    gap: 0.5rem;
+    flex-grow: 1;
+    margin-right: 1rem;
+    position: relative; /* For autocomplete wrapper if it's direct child */
 }
 .tags-input-container label {
     font-size: 0.85rem;
     color: #555;
-    margin-bottom: 0; /* Align with input */
+    margin-bottom: 0;
+}
+.autocomplete-wrapper {
+    position: relative;
+    display: inline-block;
+    flex-grow: 1; /* Allow wrapper to grow */
+    max-width: 300px;
 }
 #noteTagsInput {
-    /* flex-grow: 1; */ /* Let tags-display-area define width more */
     padding: 0.4rem 0.6rem;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 0.9em;
-    min-width: 150px; /* Minimum width for typing */
+    width: 100%; /* Fill autocomplete-wrapper */
+    box-sizing: border-box;
 }
+.tag-suggestions-list {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-top: none;
+    max-height: 150px;
+    overflow-y: auto;
+    z-index: 1000; /* Higher than editor components */
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.tag-suggestions-list li { padding: 0.5rem 0.8rem; cursor: pointer; font-size: 0.9em; }
+.tag-suggestions-list li:hover { background-color: #f0f0f0; }
+.tag-suggestions-list li.selected { background-color: #007bff; color: white; }
+
 .tags-display-area {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem; /* Space between pills */
-    /* margin-left: 0.5rem; */ /* Managed by gap in parent */
-    max-height: 40px; /* Limit height if many tags, might need scroll or different UI */
-    overflow-y: auto; /* Scroll if too many tags */
+    gap: 0.4rem;
+    max-height: 40px;
+    overflow-y: auto;
+    margin-left: 0.5rem; /* Space from autocomplete wrapper */
 }
 .tag-pill {
-    background-color: #007bff; /* Primary color for tags */
+    background-color: #007bff;
     color: white;
     padding: 0.25rem 0.6rem;
-    border-radius: 12px; /* More pill-like */
+    border-radius: 12px;
     font-size: 0.8em;
     font-weight: 500;
     display: inline-flex;
@@ -479,95 +492,138 @@
     padding: 0;
     line-height: 1;
 }
-.tag-pill .remove-tag-btn:hover {
-    color: white;
-}
-
-.tag-nav li a .tag-count {
-    color: #6c757d; /* Bootstrap secondary text color */
-    font-size: 0.9em;
-    margin-left: 4px;
-}
-.tag-nav li a.active-filter {
-    background-color: #0056b3; /* Darker blue for active filter */
-    color: white;
-    font-weight: 600;
-}
-.tag-nav li a.active-filter .tag-count {
-    color: #e0e0e0; /* Lighter count color for contrast */
-}
-
+.tag-pill .remove-tag-btn:hover { color: white; }
 
 .note-metadata {
-    /* Styles for note-metadata are now minimal as it's part of the flex footer */
     font-size: 0.8rem;
     color: #777;
     text-align: right;
-    white-space: nowrap; /* Prevent metadata from wrapping if possible */
+    white-space: nowrap;
 }
 
-.autocomplete-wrapper {
-    position: relative; /* For absolute positioning of suggestions */
-    display: inline-block; /* Or 'flex-grow: 1' if it should expand */
+/* QR Code Modal Specifics */
+#qrCodeModal .modal-content { /* Target specific modal if needed */
+    /* text-align: center; -- Handled by class in HTML */
+}
+#qrCodeCanvasContainer { /* Ensure it behaves as a block for centering canvas/img */
+    display: block;
+}
+#qrCodeCanvasContainer canvas,
+#qrCodeCanvasContainer img {
+    display: block;
+    margin: 10px auto;
 }
 
-.tag-suggestions-list {
-    position: absolute;
+
+/* Offline Mode Toggle */
+.offline-toggle-container {
+    display: flex;
+    align-items: center;
+    margin-right: 15px;
+}
+.offline-toggle-container label {
+    font-size: 0.85em;
+    color: #555;
+    margin-right: 5px;
+    cursor: pointer;
+}
+.toggle-switch { /* Basic checkbox style for now */
+    margin: 0;
+    vertical-align: middle;
+}
+
+
+/* App Footer (for mobile menu) */
+.mobile-footer-menu {
+    display: none;
+    background-color: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+    position: fixed;
+    bottom: 0;
     left: 0;
     right: 0;
-    top: 100%; /* Position below the input field */
-    background-color: #fff;
-    border: 1px solid #ccc;
-    border-top: none;
-    max-height: 150px;
-    overflow-y: auto;
-    z-index: 100; /* Ensure it's above other elements */
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 1000;
+    height: 55px;
+    align-items: stretch;
+    justify-content: space-around;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
 }
-
-.tag-suggestions-list li {
-    padding: 0.5rem 0.8rem;
+.mobile-footer-menu .footer-icon {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #555;
     cursor: pointer;
-    font-size: 0.9em;
+    padding: 0.5rem;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease, background-color 0.2s ease;
 }
+.mobile-footer-menu .footer-icon:hover { background-color: #e9e9e9; }
+.mobile-footer-menu .footer-icon.active { color: #007bff; background-color: #e0e0e0; }
 
-.tag-suggestions-list li:hover {
-    background-color: #f0f0f0;
-}
 
-.tag-suggestions-list li.selected { /* For keyboard navigation */
-    background-color: #007bff;
-    color: white;
+/* Modal Styling (General) */
+.modal {
+    position: fixed;
+    z-index: 1001;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+    align-items: center;
+    justify-content: center;
+    display: flex;
 }
+.modal-content {
+    background-color: #fefefe;
+    padding: 25px 30px;
+    border: 1px solid #bbb;
+    width: 90%;
+    max-width: 450px; /* Default max width */
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    position: relative;
+}
+#shareNoteModal .modal-content { max-width: 500px; } /* Wider for share modal */
 
-
-.note-item .shared-indicator {
-    font-size: 0.75em;
-    color: #007bff; /* Or another distinct color */
-    margin-left: 8px;
-    font-weight: normal;
+.modal-content h4 { margin-top: 0; margin-bottom: 20px; font-size: 1.25rem; color: #333; }
+.modal-content input[type="text"],
+.modal-content input[type="email"],
+.modal-content input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
 }
-
-.note-item.shared-note-item {
-    /* Optionally add a specific background or border to distinguish shared notes in the list */
-    /* border-left: 3px solid #007bff; */
-    /* background-color: #e7f3ff; */
+.modal-content button { padding: 10px 18px; font-size: 0.95rem; margin-right: 10px; }
+.modal-content button:last-child { margin-right: 0; }
+.modal-content .button-primary { background-color: #007bff; color: white; }
+.modal-content .button-primary:hover { background-color: #0056b3; }
+.close-button {
+    color: #888;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    line-height: 1;
 }
-.note-item.shared-note-item.active {
-    /* Ensure active shared note style is also distinct or overrides default active */
-    background-color: #d6eaff; /* Slightly different active color for shared notes */
-    border-left: 3px solid #0056b3;
-}
+.close-button:hover, .close-button:focus { color: #333; text-decoration: none; cursor: pointer; }
 
 /* Styles for "Currently Shared With" list in Share Modal */
 .currently-shared-list {
     list-style: none;
     padding: 0;
     margin-top: 0.5rem;
-    max-height: 150px; /* Or as desired */
+    max-height: 150px;
     overflow-y: auto;
 }
 .currently-shared-list li {
@@ -578,9 +634,7 @@
     border-bottom: 1px solid #eee;
     font-size: 0.9em;
 }
-.currently-shared-list li:last-child {
-    border-bottom: none;
-}
+.currently-shared-list li:last-child { border-bottom: none; }
 .currently-shared-list .revoke-share-btn {
     padding: 0.2rem 0.5rem;
     font-size: 0.85em;
@@ -588,270 +642,68 @@
     border-color: #f5c6cb;
     color: #721c24;
 }
-.currently-shared-list .revoke-share-btn:hover {
-    background-color: #f1b0b7;
-}
-
-.offline-toggle-container {
-    display: flex;
-    align-items: center;
-    margin-right: 20px; /* Space from username */
-}
-.offline-toggle-container label {
-    font-size: 0.85em;
-    color: #555;
-    margin-right: 5px;
-    cursor: pointer;
-}
-.toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 34px; /* Width of the switch */
-    height: 20px; /* Height of the switch */
-    cursor: pointer;
-}
-.toggle-switch input { display:none; } /* Hide default checkbox */
-
-/* Add styles for a custom toggle switch appearance if desired, or use browser default */
-/* For now, browser default checkbox will be used. Custom styling is more involved. */
+.currently-shared-list .revoke-share-btn:hover { background-color: #f1b0b7; }
 
 
-/* App Footer (for mobile menu) */
-.mobile-footer-menu { /* Use a more specific class if .app-footer is for desktop copyright */
-    display: none; /* Hidden by default, shown in mobile via @media query */
-    background-color: #f9f9f9; /* Match toolbar */
-    border-top: 1px solid #e0e0e0;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    height: 55px; /* Slightly taller for touch */
-    align-items: stretch; /* Stretch items to fill height */
-    justify-content: space-around;
-    box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
-}
-.mobile-footer-menu .footer-icon {
-    background: none;
-    border: none;
-    font-size: 1.5rem; /* Adjust for better icon rendering */
-    color: #555;
-    cursor: pointer;
-    padding: 0.5rem; /* More padding */
-    flex-grow: 1; /* Distribute space equally */
-    display: flex;
-    flex-direction: column; /* If adding text below icon */
-    align-items: center;
-    justify-content: center;
-    transition: color 0.2s ease, background-color 0.2s ease;
-}
-.mobile-footer-menu .footer-icon:hover {
-    background-color: #e9e9e9;
-}
-.mobile-footer-menu .footer-icon.active {
-    color: #007bff; /* Active icon color */
-    background-color: #e0e0e0;
-}
-
-
-/* Modal Styling */
-.modal {
-    /* display: none; Replaced by JS control */
-    position: fixed;
-    z-index: 1001;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.5);
-    align-items: center; /* Vertically center */
-    justify-content: center; /* Horizontally center */
-    display: flex; /* Use flex for centering, will be toggled by JS */
-}
-
-.modal-content {
-    background-color: #fefefe;
-    padding: 25px 30px;
-    border: 1px solid #bbb;
-    width: 90%;
-    max-width: 450px;
-    border-radius: 8px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    position: relative; /* For close button positioning */
-}
-
-.modal-content h4 {
-    margin-top: 0;
-    margin-bottom: 20px;
-    font-size: 1.25rem;
-    color: #333;
-}
-
-.modal-content input[type="text"],
-.modal-content input[type="email"],
-.modal-content input[type="password"] { /* General modal input styling */
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box;
-}
-
-.modal-content button {
-    padding: 10px 18px;
-    font-size: 0.95rem;
-    margin-right: 10px;
-}
-.modal-content button:last-child {
-    margin-right: 0;
-}
-.modal-content .button-primary { /* Specific styling for primary button in modal */
-    background-color: #007bff;
-    color: white;
-}
-.modal-content .button-primary:hover {
-    background-color: #0056b3;
-}
-
-
-.close-button {
-    color: #888;
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    font-size: 28px;
-    font-weight: bold;
-    line-height: 1;
-}
-
-.close-button:hover,
-.close-button:focus {
-    color: #333;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-
-/* Mobile specific design - Footer Icon Menu */
+/* Mobile specific design */
 @media (max-width: 768px) {
-    .app-header h1 {
-        font-size: 1.2rem; /* Smaller title on mobile */
-    }
-    .user-nav #usernameDisplay {
-        display: none; /* Hide username text on small screens */
-    }
+    .app-header h1 { font-size: 1.2rem; }
+    .user-nav #usernameDisplay { display: none; }
+    .offline-toggle-container label { display: none; } /* Hide label on mobile, icon/indicator enough */
+    .offline-toggle-container { margin-right: 10px; }
+
 
     .app-container {
-        /* On mobile, typically one view (sidebar, notes list, or editor) is prominent */
-        /* The logic for this often involves JS to toggle visibility or change layout */
-        margin-bottom: 50px; /* Space for footer menu */
-        height: calc(100vh - 60px - 50px); /* Header and footer menu */
+        margin-bottom: 55px;
+        height: calc(100vh - 60px - 55px);
     }
-
     .sidebar {
-        /* Could be hidden by default and toggled by a menu button */
-        /* display: none; */
         position: absolute;
-        left: -260px; /* Hidden off-screen */
-        top: 60px; /* Below header */
-        height: calc(100vh - 60px);
-        z-index: 999;
+        left: -260px;
+        top: 60px;
+        height: calc(100vh - 60px - 55px); /* Adjust for footer menu */
+        z-index: 1001; /* Above main content, below header */
         transition: left 0.3s ease-in-out;
+        border-bottom: none; /* No bottom border if it's full height */
     }
-    .sidebar.open {
-        left: 0; /* Slide in */
-        box-shadow: 3px 0 10px rgba(0,0,0,0.1);
-    }
+    .sidebar.open { left: 0; box-shadow: 3px 0 10px rgba(0,0,0,0.1); }
 
+    .main-content { flex-direction: column; }
+    .note-list-panel { width: 100%; height: 100%; border-right: none; }
+    .note-editor-panel { width: 100%; height: 100%; position: absolute; top: 60px; left:0; z-index: 1000; }
 
-    .main-content {
-        /* By default, show note list, hide editor, or vice-versa */
-    }
+    /* Mobile View States */
+    body.mobile-view-list .note-list-panel { display: flex; }
+    body.mobile-view-list .note-editor-panel { display: none; }
+    body.mobile-view-list .sidebar { left: -260px; }
 
-    .note-list-panel {
-        width: 100%; /* Takes full width if editor is hidden */
-        height: 100%;
-        border-right: none;
-    }
+    body.mobile-view-editor .note-list-panel { display: none; }
+    body.mobile-view-editor .note-editor-panel { display: flex; }
+    body.mobile-view-editor .sidebar { left: -260px; }
 
-    .note-editor-panel {
-        /* display: none; /* Hidden by default, shown when a note is selected */
-        position: absolute;
-        top: 60px; /* Below header */
-        left: 0;
-        width: 100%;
-        height: calc(100vh - 60px - 50px); /* Full height above footer menu */
-        z-index: 998; /* Below sidebar if it overlaps */
-        /* Transition for sliding in/out if desired */
-    }
+    body.mobile-view-sidebar .sidebar { left: 0; }
+    body.mobile-view-sidebar .note-list-panel { display: none; }
+    body.mobile-view-sidebar .note-editor-panel { display: none; }
 
-    /* JS will toggle these classes to show one or the other panel */
-    .mobile-view-list .note-editor-panel { display: none; }
-    .mobile-view-list .note-list-panel { display: flex; } /* Ensure it's flex */
-
-    .mobile-view-editor .note-list-panel { display: none; }
-    .mobile-view-editor .note-editor-panel { display: flex; } /* Ensure it's flex */
-    .mobile-view-editor .sidebar.open { left: -260px; } /* Close sidebar if editor opens */
-
-
-    .mobile-footer-menu { /* Renamed from .app-footer for this context */
-        display: flex; /* Show footer menu on mobile */
-    }
-    .app-container { /* Adjust app container for fixed footer */
-        margin-bottom: 55px; /* Height of the mobile footer menu */
-        height: calc(100vh - 60px - 55px); /* Header and footer menu */
-    }
-
-    /* Default mobile view: Show note list, hide editor and sidebar */
-    .main-content {
-        /* flex-direction: column; /* Already set */
-    }
-    .sidebar {
-        /* Keep existing mobile sidebar styles (hidden off-screen, toggled by JS) */
-        /* position: absolute; left: -260px; ... */
-    }
-    .note-editor-panel {
-        /* display: none; /* Hide editor by default on mobile */
-        /* This will be controlled by JS adding a class like 'mobile-active-panel' */
-    }
-    .note-list-panel {
-        /* display: flex; /* Show list by default */
-        /* This will also be controlled by JS */
-    }
-
-    /* Define which panel is visible */
-    .mobile-view-list .note-list-panel { display: flex; }
-    .mobile-view-list .note-editor-panel { display: none; }
-    .mobile-view-list .sidebar { left: -260px; /* Ensure sidebar is closed */ }
-
-    .mobile-view-editor .note-list-panel { display: none; }
-    .mobile-view-editor .note-editor-panel { display: flex; }
-    .mobile-view-editor .sidebar { left: -260px; /* Ensure sidebar is closed */ }
-
-    .mobile-view-sidebar .sidebar { left: 0; }
-    /* When sidebar is open, we might want to hide both note list and editor, or show list under it */
-    .mobile-view-sidebar .note-list-panel { display: none; } /* Example: hide list when sidebar open */
-    .mobile-view-sidebar .note-editor-panel { display: none; } /* Example: hide editor too */
-
+    .mobile-footer-menu { display: flex; }
 
     #noteContentTextarea {
         background-image: linear-gradient(to bottom, transparent calc(1.6em - 1px), #e8e8e8 1.6em);
-        background-size: 100% 1.6em; /* Adjust line spacing for mobile if needed */
+        background-size: 100% 1.6em;
         line-height: 1.6;
         padding: 1rem;
     }
-    .note-editor-panel .panel-header, .toolbar, .note-metadata {
+    .note-editor-panel .panel-header, .toolbar, .note-editor-footer {
         padding-left: 1rem;
         padding-right: 1rem;
     }
     #noteTitleInput { font-size: 1.2rem; }
+    .note-folder-select { max-width: 120px; } /* Smaller on mobile */
+    .tags-input-container { flex-direction: column; align-items: flex-start; gap: 0.3rem;}
+    .autocomplete-wrapper { width: 100%; }
+    #noteTagsInput { width: 100%; }
+    .tags-display-area { margin-left: 0; margin-top: 0.3rem; }
 
-    /* Modal on mobile */
-    .modal-content {
-        margin: 10% auto;
-        width: 90%;
-        padding: 20px;
-    }
+
+    .modal-content { margin: 10% auto; width: 90%; padding: 20px; }
 }

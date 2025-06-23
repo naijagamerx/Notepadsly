@@ -163,7 +163,8 @@
                 <button id="saveNoteBtn" title="Save Note">Save</button>
                 <button id="deleteNoteBtn" title="Delete Note">Delete</button>
                 <button id="shareNoteBtn" title="Share Note">Share</button>
-                <button id="downloadNoteBtn" title="Download Note">&#11015;</button> <!-- Down arrow icon -->
+                <button id="qrCodeNoteBtn" title="Get QR Code for Note Link">&#9776;</button> <!-- Using a generic icon, like a menu or bars -->
+                <button id="downloadNoteBtn" title="Download Note">&#11015;</button>
             </div>
         </div>
                 <div class="toolbar" id="noteEditorToolbar">
@@ -191,6 +192,22 @@
         </div>
     </div>
 
+    <!-- QR Code Modal -->
+    <div id="qrCodeModal" class="modal" style="display:none;">
+        <div class="modal-content text-center"> <!-- Added text-center for modal content -->
+            <span class="close-button" data-modal-id="qrCodeModal">&times;</span>
+            <h4>Share Note Link via QR Code</h4>
+            <div id="qrCodeCanvasContainer" style="margin: 20px auto; width: 200px; height: 200px;">
+                <!-- QR code will be rendered here by JS (e.g., as a canvas or img) -->
+            </div>
+            <p>Scan the QR code above or use the link below:</p>
+            <input type="text" id="qrCodeUrlDisplay" readonly style="width: 90%; margin-bottom: 10px; text-align: center;">
+            <button id="copyQrCodeUrlBtn" class="button">Copy Link</button>
+        </div>
+    </div>
+
+    <!-- QR Code Library (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <!-- Basic JS for interactivity, actual data will come from php/dashboard.php -->
     <script src="../js/dashboard.js"></script>
 </body>

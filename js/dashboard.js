@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     // --- DOM Elements ---
-    // ... (all existing DOM elements) ...
+    // ... (all existing DOM elements from previous overwrite) ...
     const usernameDisplay = document.getElementById('usernameDisplay');
     const adminLinkContainer = document.getElementById('adminLinkContainer');
     const newNoteBtn = document.getElementById('newNoteBtn');
@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const deleteNoteBtn = document.getElementById('deleteNoteBtn');
     const shareNoteBtn = document.getElementById('shareNoteBtn');
     const downloadNoteBtn = document.getElementById('downloadNoteBtn');
+    const qrCodeNoteBtn = document.getElementById('qrCodeNoteBtn'); // New
     const searchNotesInput = document.getElementById('searchNotes');
     const newFolderModal = document.getElementById('newFolderModal');
     const closeNewFolderModalBtn = newFolderModal ? newFolderModal.querySelector('.close-button[data-modal-id="newFolderModal"]') : null;
@@ -49,13 +50,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.querySelector('.sidebar');
     const noteListPanel = document.querySelector('.note-list-panel');
     const appBody = document.body;
-
-    // Local Storage Feature Elements
     const workOfflineToggle = document.getElementById('workOfflineToggle');
     const offlineModeIndicator = document.getElementById('offlineModeIndicator');
-    const LOCAL_STORAGE_PREFIX = 'notepadsly_offline_note_';
-    const NEW_OFFLINE_NOTE_KEY = 'notepadsly_new_offline_note';
+    const syncToServerBtn = document.createElement('button');
+    syncToServerBtn.id = 'syncToServerBtn';
+    syncToServerBtn.textContent = 'Sync Offline Notes';
+    syncToServerBtn.classList.add('button', 'button-primary');
+    syncToServerBtn.style.display = 'none';
+    syncToServerBtn.style.marginLeft = '10px';
 
+    // QR Code Modal Elements
+    const qrCodeModal = document.getElementById('qrCodeModal');
+    const closeQrCodeModalBtn = qrCodeModal ? qrCodeModal.querySelector('.close-button') : null;
+    const qrCodeCanvasContainer = document.getElementById('qrCodeCanvasContainer');
+    const qrCodeUrlDisplay = document.getElementById('qrCodeUrlDisplay');
+    const copyQrCodeUrlBtn = document.getElementById('copyQrCodeUrlBtn');
+    let qrCodeInstance = null; // To hold the QRCode object
+
+
+    const LOCAL_STORAGE_PREFIX = 'notepadsly_offline_note_';
+    const LOCAL_STORAGE_NEW_NOTES_INDEX_KEY = 'notepadsly_new_offline_notes_index';
 
     // --- State Variables ---
     // ... (all existing state variables) ...
@@ -68,27 +82,22 @@ document.addEventListener('DOMContentLoaded', function() {
     let allFolders = [];
     let allUserUniqueTags = [];
     let currentMobileView = 'list';
-    let isOfflineMode = false; // For local storage feature
-    let localNewNoteContent = null; // Holds content of a new note created in offline mode
+    let isOfflineMode = false;
 
     // --- Initialization ---
     function initializeDashboard() {
         fetchUserData();
-        loadInitialData();
+        loadInitialData(() => {
+            handleDeepLinking(); // Process hash after notes are loaded
+        });
         setupEventListeners();
 
-        // Initialize offline mode state from localStorage if previously set
         const savedOfflineMode = localStorage.getItem('notepadsly_offline_mode_enabled');
-        if (savedOfflineMode === 'true') {
-            isOfflineMode = true;
-            if(workOfflineToggle) workOfflineToggle.checked = true;
-            if(offlineModeIndicator) offlineModeIndicator.style.display = 'inline';
-        } else {
-            isOfflineMode = false; // Ensure it's false if not set or set to false
-            if(workOfflineToggle) workOfflineToggle.checked = false;
-            if(offlineModeIndicator) offlineModeIndicator.style.display = 'none';
-        }
+        isOfflineMode = savedOfflineMode === 'true';
+        if(workOfflineToggle) workOfflineToggle.checked = isOfflineMode;
+        if(offlineModeIndicator) offlineModeIndicator.style.display = isOfflineMode ? 'inline' : 'none';
 
+        updateSyncToServerButtonVisibility();
         updateEditorState(null);
         if(document.getElementById('currentYear')) {
             document.getElementById('currentYear').textContent = new Date().getFullYear();
@@ -97,48 +106,189 @@ document.addEventListener('DOMContentLoaded', function() {
         window.addEventListener('resize', checkScreenWidth);
     }
 
+    function handleDeepLinking() {
+        if (window.location.hash && window.location.hash.startsWith('#note=')) {
+            const noteIdFromHash = window.location.hash.substring('#note='.length);
+            const noteToLoad = allNotes.find(n => n.id == noteIdFromHash && n.note_status !== 'local_new'); // Only link to server notes
+
+            if (noteToLoad) {
+                // If offline, and a local version exists and is newer, prompt as usual
+                if (isOfflineMode) {
+                    const localNote = loadNoteFromLocalStorage(noteIdFromHash);
+                    if (localNote && localNote.last_saved_offline > new Date(noteToLoad.updated_at).getTime()) {
+                        if (confirm("An offline version of the linked note is available and is newer. Load offline version?")) {
+                             updateEditorState({
+                                id: noteIdFromHash, title: localNote.title, content: localNote.content,
+                                tags: localNote.tags || [], folder_id: localNote.folder_id || noteToLoad.folder_id,
+                                updated_at: new Date(localNote.last_saved_offline).toISOString(),
+                                note_status: noteToLoad.note_status, permission: noteToLoad.permission, isLocalNew: false
+                            });
+                            setActiveNoteListItem(noteIdFromHash);
+                            if (window.innerWidth <= 768) setMobileView('editor');
+                            window.location.hash = ''; // Clear hash
+                            return; // Stop further processing for this note
+                        }
+                    }
+                }
+                // Default to loading server version or if user declined local
+                loadNoteIntoEditor(noteIdFromHash);
+                setActiveNoteListItem(noteIdFromHash);
+                if (window.innerWidth <= 768) {
+                    setMobileView('editor');
+                }
+            } else {
+                showGlobalNotification("Linked note not found or is not accessible.", "error");
+            }
+            window.location.hash = ''; // Clear hash
+        }
+    }
+
     // --- Local Storage Functions ---
-    function saveNoteToLocalStorage(noteId, title, content, tags) {
-        if (!isOfflineMode) return; // Only save if in offline mode explicitly for this action
-        const key = noteId ? `${LOCAL_STORAGE_PREFIX}${noteId}` : NEW_OFFLINE_NOTE_KEY;
+    // ... (getAllLocalNotes, saveNoteToLocalStorage, loadNoteFromLocalStorage, removeNoteFromLocalStorage,
+    //      getNewOfflineNotesIndex, setNewOfflineNotesIndex, addTempIdToNewOfflineNotesIndex, removeTempIdFromNewOfflineNotesIndex,
+    //      updateSyncToServerButtonVisibility, syncAllOfflineNotesToServer - all remain as previously defined) ...
+    function getNewOfflineNotesIndex() {
+        try {
+            const indexJson = localStorage.getItem(LOCAL_STORAGE_NEW_NOTES_INDEX_KEY);
+            return indexJson ? JSON.parse(indexJson) : [];
+        } catch (e) { return []; }
+    }
+    function setNewOfflineNotesIndex(index) {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_NEW_NOTES_INDEX_KEY, JSON.stringify(index));
+        } catch (e) { console.error("Error saving new offline notes index:", e); }
+    }
+    function addTempIdToNewOfflineNotesIndex(tempId) {
+        const index = getNewOfflineNotesIndex();
+        if (!index.includes(tempId)) {
+            index.push(tempId);
+            setNewOfflineNotesIndex(index);
+        }
+    }
+    function removeTempIdFromNewOfflineNotesIndex(tempId) {
+        let index = getNewOfflineNotesIndex();
+        index = index.filter(id => id !== tempId);
+        setNewOfflineNotesIndex(index);
+    }
+    function saveNoteToLocalStorage(noteId, title, content, tags, folderId = null, isNew = false) {
+        const key = isNew ? noteId : `${LOCAL_STORAGE_PREFIX}${noteId}`;
         const data = {
-            title: title,
-            content: content,
-            tags: tags, // Store tags as array of {id, name} or just names
-            last_saved_offline: Date.now()
+            id: noteId,
+            title: title, content: content, tags: tags,
+            folder_id: folderId, last_saved_offline: Date.now(),
+            isLocalNew: isNew
         };
         try {
             localStorage.setItem(key, JSON.stringify(data));
-            showGlobalNotification("Note saved locally (offline).", "info", 2000);
+            if (isNew) addTempIdToNewOfflineNotesIndex(noteId);
+            updateSyncToServerButtonVisibility();
         } catch (e) {
             console.error("Error saving to localStorage:", e);
             showGlobalNotification("Could not save note locally. Storage might be full.", "error");
         }
     }
-
-    function loadNoteFromLocalStorage(noteId) {
-        const key = noteId ? `${LOCAL_STORAGE_PREFIX}${noteId}` : NEW_OFFLINE_NOTE_KEY;
+    function loadNoteFromLocalStorage(noteIdOrTempId) {
+        const key = noteIdOrTempId.startsWith('temp_offline_') ? noteIdOrTempId : `${LOCAL_STORAGE_PREFIX}${noteIdOrTempId}`;
         try {
             const data = localStorage.getItem(key);
             return data ? JSON.parse(data) : null;
-        } catch (e) {
-            console.error("Error loading from localStorage:", e);
-            return null;
-        }
+        } catch (e) { console.error("Error loading from localStorage:", e); return null; }
     }
-
-    function removeNoteFromLocalStorage(noteId) {
-        const key = noteId ? `${LOCAL_STORAGE_PREFIX}${noteId}` : NEW_OFFLINE_NOTE_KEY;
+    function removeNoteFromLocalStorage(noteIdOrTempId) {
+        const key = noteIdOrTempId.startsWith('temp_offline_') ? noteIdOrTempId : `${LOCAL_STORAGE_PREFIX}${noteIdOrTempId}`;
         try {
             localStorage.removeItem(key);
-        } catch (e) {
-            console.error("Error removing from localStorage:", e);
+            if (noteIdOrTempId.startsWith('temp_offline_')) {
+                removeTempIdFromNewOfflineNotesIndex(noteIdOrTempId);
+            }
+            updateSyncToServerButtonVisibility();
+        } catch (e) { console.error("Error removing from localStorage:", e); }
+    }
+    function getAllLocalNotes() {
+        const localNotes = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith(LOCAL_STORAGE_PREFIX) || key.startsWith('temp_offline_')) { // Check both prefixes
+                try {
+                    const noteData = JSON.parse(localStorage.getItem(key));
+                    if (noteData) {
+                        const serverNote = allNotes.find(n => n.id == noteData.id && n.note_status !== 'local_new' && !n.id.startsWith('temp_offline_'));
+                        if (noteData.isLocalNew || !serverNote || (serverNote && noteData.last_saved_offline > new Date(serverNote.updated_at).getTime())) {
+                            noteData.needsSync = true;
+                        } else {
+                            noteData.needsSync = false; // Explicitly set if not needing sync
+                        }
+                        localNotes.push(noteData);
+                    }
+                } catch (e) { console.error("Error parsing local note:", key, e); }
+            }
         }
+        return localNotes;
+    }
+    function updateSyncToServerButtonVisibility() {
+        if (!syncToServerBtn) return;
+        if (!isOfflineMode && getAllLocalNotes().some(n => n.needsSync)) {
+            syncToServerBtn.style.display = 'inline-block';
+        } else {
+            syncToServerBtn.style.display = 'none';
+        }
+    }
+    async function syncAllOfflineNotesToServer() {
+        const localNotesToSync = getAllLocalNotes().filter(n => n.needsSync);
+        let allSyncsSuccessful = true;
+        let syncMessages = [];
+
+        if (localNotesToSync.length === 0) {
+            showGlobalNotification("No offline changes to sync.", "info");
+            updateSyncToServerButtonVisibility();
+            return;
+        }
+        showGlobalNotification("Syncing offline changes to server...", "info", 5000 + localNotesToSync.length * 1000);
+
+        for (const localNote of localNotesToSync) {
+            const isNewRealOfflineNote = localNote.id.startsWith('temp_offline_'); // True if it's a new note created offline
+            let serverUrl = isNewRealOfflineNote ? '../php/dashboard.php?action=create_note' : '../php/dashboard.php?action=update_note';
+
+            const formData = new FormData();
+            formData.append('title', localNote.title);
+            formData.append('content', localNote.content);
+            if (localNote.folder_id) formData.append('folder_id', localNote.folder_id);
+
+            if (!isNewRealOfflineNote) {
+                formData.append('note_id', localNote.id);
+            }
+
+            try {
+                const response = await fetch(serverUrl, { method: 'POST', body: formData });
+                const result = await response.json();
+
+                if (result.success) {
+                    const syncedNoteId = result.note_id || localNote.id;
+                    syncMessages.push(`Note "${localNote.title}" synced.`);
+
+                    const tagsToSync = (localNote.tags || []).map(t => t.name);
+                    const tagSyncData = await syncTagsForNote(syncedNoteId, tagsToSync);
+                    if (!tagSyncData.success) {
+                        syncMessages.push(`Tags for "${localNote.title}" failed to sync: ${tagSyncData.message}`);
+                        allSyncsSuccessful = false;
+                    }
+                    removeNoteFromLocalStorage(localNote.id);
+                } else {
+                    allSyncsSuccessful = false;
+                    syncMessages.push(`Failed to sync note "${localNote.title}": ${result.message}`);
+                }
+            } catch (error) {
+                allSyncsSuccessful = false;
+                syncMessages.push(`Error syncing note "${localNote.title}".`);
+                console.error(`Error syncing note ${localNote.id}:`, error);
+            }
+        }
+        showGlobalNotification(syncMessages.join('\n'), allSyncsSuccessful ? 'success' : 'error', 5000 + localNotesToSync.length * 1000);
+        updateSyncToServerButtonVisibility();
     }
 
 
     // --- Core Data Functions (fetchUserData, loadInitialData) ---
-    // ... (fetchUserData, loadInitialData implementations remain largely the same) ...
     function fetchUserData() {
         fetch('../php/dashboard.php?action=get_user_info')
             .then(response => response.json())
@@ -149,6 +299,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.role === 'admin' && adminLinkContainer) {
                         adminLinkContainer.innerHTML = `<a href="/admin_dashboard" class="button button-secondary">Admin Panel</a>`;
                     }
+                    if (usernameDisplay && usernameDisplay.parentNode && !document.getElementById('syncToServerBtn')) {
+                         usernameDisplay.parentNode.insertBefore(syncToServerBtn, adminLinkContainer);
+                    }
                 } else if (!data.success) {
                     console.error('Failed to fetch user info:', data.message);
                 }
@@ -157,8 +310,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error fetching user data:', error);
             });
     }
-
-    function loadInitialData(callback) { // Added callback
+    function loadInitialData(callback) {
         fetch('../php/dashboard.php?action=get_initial_data')
             .then(response => response.json())
             .then(result => {
@@ -167,31 +319,49 @@ document.addEventListener('DOMContentLoaded', function() {
                     allFolders = result.data.folders || [];
                     allUserUniqueTags = result.data.tags || [];
 
+                    const newOfflineNoteIds = getNewOfflineNotesIndex();
+                    newOfflineNoteIds.forEach(tempId => {
+                        const localNoteData = loadNoteFromLocalStorage(tempId);
+                        if (localNoteData && !allNotes.some(n => n.id === tempId)) {
+                            allNotes.unshift({
+                                id: tempId,
+                                title: localNoteData.title,
+                                snippet: (localNoteData.content || "").substring(0,100),
+                                tags: localNoteData.tags || [],
+                                folder_id: localNoteData.folder_id || null,
+                                updated_at: new Date(localNoteData.last_saved_offline).toISOString(),
+                                note_status: 'local_new',
+                                isLocalNew: true
+                            });
+                        }
+                    });
+                     allNotes.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
                     renderFolders(allFolders);
                     renderTagsSidebar(allUserUniqueTags);
                     renderNoteList(allNotes);
 
-                    if (allNotes.length === 0) { // If no server notes, still check for new offline note
+                    if (allNotes.length === 0) {
                          updateEditorState(null);
                     }
-                    if (callback) callback(); // Execute callback after data is loaded
+                    updateSyncToServerButtonVisibility();
+                    if (callback) callback();
                 } else {
                     console.error('Failed to load initial data:', result.message);
                     showGlobalNotification(result.message || 'Failed to load data.', 'error');
-                    if (callback) callback(); // Still call callback on error
+                    if (callback) callback();
                 }
             })
             .catch(error => {
                 console.error('Error loading initial data:', error);
                 showGlobalNotification('Error loading initial data.', 'error');
-                if (callback) callback(); // Still call callback on error
+                if (callback) callback();
             });
     }
 
-
-    // --- Rendering Functions (renderFolders, renderTagsSidebar, renderCurrentNoteTags, renderNoteList) ---
-    // ... (These implementations remain largely the same) ...
-    function renderFolders(folders) {
+    // --- Rendering Functions ---
+    // ... (renderFolders, renderTagsSidebar, renderCurrentNoteTags, renderNoteList, setActiveNoteListItem, setActiveFolderListItem remain the same) ...
+    function renderFolders(folders) { /* ... same ... */
         if (!folderListUl) return;
         folderListUl.innerHTML = '<li><a href="#" data-folder-id="all" class="active"><span>All Notes</span></a></li>';
 
@@ -235,8 +405,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setActiveFolderListItem(activeFolderLink.dataset.folderId);
         }
     }
-
-    function renderTagsSidebar(tags) {
+    function renderTagsSidebar(tags) { /* ... same ... */
         if (!tagListUl) return;
         tagListUl.innerHTML = '';
         if (tags.length === 0) {
@@ -250,8 +419,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tagListUl.appendChild(li);
         });
     }
-
-    function renderCurrentNoteTags() {
+    function renderCurrentNoteTags() { /* ... same ... */
         if (!currentNoteTagsDisplay) return;
         currentNoteTagsDisplay.innerHTML = '';
         currentNoteTags.forEach(tag => {
@@ -273,8 +441,7 @@ document.addEventListener('DOMContentLoaded', function() {
             currentNoteTagsDisplay.appendChild(pill);
         });
     }
-
-    function renderNoteList(notesToRender) {
+    function renderNoteList(notesToRender) { /* ... updated for offline indicators ... */
         if (!noteListUl) return;
         noteListUl.innerHTML = '';
         if (notesToRender.length === 0) {
@@ -289,9 +456,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const date = new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             let titleHTML = `<h4>${escapeHTML(note.title) || 'Untitled Note'}</h4>`;
 
+            const localVersion = loadNoteFromLocalStorage(note.id);
+            const serverUpdatedAt = note.updated_at ? new Date(note.updated_at).getTime() : 0;
+
             if (note.note_status === 'shared') {
                 titleHTML += `<small class="shared-indicator">(Shared by ${escapeHTML(note.shared_by_username)})</small>`;
                 li.classList.add('shared-note-item');
+            } else if (note.note_status === 'local_new' || (note.isLocalNew && note.id.startsWith('temp_offline_'))) {
+                titleHTML += `<small class="offline-indicator">(Offline New)</small>`;
+                li.classList.add('local-new-note-item');
+            } else if (localVersion && localVersion.last_saved_offline > serverUpdatedAt) {
+                 titleHTML += `<small class="offline-indicator">(Offline changes)</small>`;
+                 li.classList.add('local-modified-note-item');
             }
 
             li.innerHTML = `
@@ -307,8 +483,7 @@ document.addEventListener('DOMContentLoaded', function() {
             noteListUl.appendChild(li);
         });
     }
-
-    function setActiveNoteListItem(noteId) {
+    function setActiveNoteListItem(noteId) { /* ... same ... */
         document.querySelectorAll('#noteList .note-item').forEach(item => {
             item.classList.remove('active');
             if (item.dataset.noteId == noteId) {
@@ -316,8 +491,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
-    function setActiveFolderListItem(folderIdOrAll) {
+    function setActiveFolderListItem(folderIdOrAll) { /* ... same ... */
         document.querySelectorAll('#folderList li a').forEach(item => {
             item.classList.remove('active');
             if (item.dataset.folderId == folderIdOrAll) {
@@ -326,43 +500,53 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // --- Editor Functions ---
+    // ... (loadNoteIntoEditor, updateEditorState, saveCurrentNote, syncTagsForNote, deleteCurrentNote remain largely the same,
+    //      but with updates for local storage interaction as shown in the previous full file overwrite) ...
+    function loadNoteIntoEditor(noteId) { // noteId can be temp offline ID or real ID
+        let noteToLoadDisplayData = allNotes.find(n => n.id == noteId);
 
-    // --- Editor Functions (loadNoteIntoEditor, updateEditorState, saveCurrentNote, syncTagsForNote, deleteCurrentNote) ---
-    function loadNoteIntoEditor(noteId) {
         if (isOfflineMode) {
             const localNote = loadNoteFromLocalStorage(noteId);
-            const serverNoteFromCache = allNotes.find(n => n.id == noteId);
 
             if (localNote) {
+                const serverNoteFromCache = noteId.startsWith('temp_offline_') ? null : allNotes.find(n => n.id == noteId && n.note_status !== 'local_new');
                 const serverUpdatedAt = serverNoteFromCache ? new Date(serverNoteFromCache.updated_at).getTime() : 0;
-                if (localNote.last_saved_offline > serverUpdatedAt || !serverNoteFromCache) {
-                    if (confirm("An offline version of this note is available and is newer (or the server version is unavailable).\nLoad the offline version?")) {
-                        updateEditorState({ // Simulate a note object for updateEditorState
-                            id: noteId, // Keep the original ID if it exists
-                            title: localNote.title,
-                            content: localNote.content,
-                            tags: localNote.tags || [], // Assuming tags are stored as array of objects or names
-                            folder_id: serverNoteFromCache ? serverNoteFromCache.folder_id : null, // Try to keep folder from server if possible
+
+                if (localNote.isLocalNew || !serverNoteFromCache || localNote.last_saved_offline >= serverUpdatedAt ) { // >= to prefer local if timestamps are very close or identical
+                    const useLocal = localNote.isLocalNew || !serverNoteFromCache || confirm("An offline version of this note is available and may be newer.\nLoad the offline version?");
+                    if (useLocal) {
+                        updateEditorState({
+                            id: noteId,
+                            title: localNote.title, content: localNote.content,
+                            tags: localNote.tags || [], folder_id: localNote.folder_id || (serverNoteFromCache ? serverNoteFromCache.folder_id : null),
                             updated_at: new Date(localNote.last_saved_offline).toISOString(),
-                            note_status: serverNoteFromCache ? serverNoteFromCache.note_status : 'owner', // Assume owner if only local
-                            permission: serverNoteFromCache ? serverNoteFromCache.permission : null
+                            note_status: localNote.isLocalNew ? 'local_new' : (serverNoteFromCache ? serverNoteFromCache.note_status : 'owner'),
+                            permission: serverNoteFromCache ? serverNoteFromCache.permission : null,
+                            isLocalNew: localNote.isLocalNew
                         });
-                        showGlobalNotification("Loaded offline version.", "info");
+                        // showGlobalNotification("Loaded offline version.", "info"); // Can be noisy
                         return;
                     }
                 }
+            } else if (noteId.startsWith('temp_offline_')) {
+                 updateEditorState(null); return;
             }
         }
-        // Proceed with server fetch if not offline, no local version, or user chose not to load local
-        const noteToLoad = allNotes.find(n => n.id == noteId);
-        if (noteToLoad) {
-            fetch(`../php/dashboard.php?action=get_note_content&id=${noteToLoad.id}`)
+
+        if (noteId.startsWith('temp_offline_')) {
+            console.error("Attempted to load temp offline note from server (should have been caught by local load).");
+            updateEditorState(null); return;
+        }
+
+        if (noteToLoadDisplayData) {
+            fetch(`../php/dashboard.php?action=get_note_content&id=${noteToLoadDisplayData.id}`)
             .then(response => response.json())
             .then(result => {
                 if (result.success && result.note) {
-                    result.note.note_status = noteToLoad.note_status || 'owner';
-                    result.note.permission = noteToLoad.permission || null;
-                    result.note.shared_by_username = noteToLoad.shared_by_username || null;
+                    result.note.note_status = noteToLoadDisplayData.note_status || 'owner';
+                    result.note.permission = noteToLoadDisplayData.permission || null;
+                    result.note.shared_by_username = noteToLoadDisplayData.shared_by_username || null;
                     updateEditorState(result.note);
                 } else {
                     showGlobalNotification(result.message || "Error loading note content.", 'error');
@@ -375,51 +559,41 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateEditorState(null);
             });
         } else {
-            console.warn(`Note with ID ${noteId} not found in local cache for loading.`);
+            console.warn(`Note with ID ${noteId} not found in allNotes for server loading.`);
             updateEditorState(null);
         }
     }
-
     function updateEditorState(noteData) {
-        // ... (updateEditorState implementation remains largely the same, handling read-only for shared notes) ...
         if (!noteEditorPanel || !editorContentWrapper) return;
+        const isNewTrulyOfflineNote = noteData && noteData.isLocalNew && noteData.id.startsWith('temp_offline_');
 
-        if (noteData && (noteData.id || noteData.isLocalNew)) { // Allow local new note state
+        if (noteData && (noteData.id || isNewTrulyOfflineNote)) {
             noteEditorPanel.classList.remove('empty');
             editorContentWrapper.style.display = 'flex';
-
-            currentNoteId = noteData.id || null; // Can be null for a new offline note
+            currentNoteId = noteData.id || null;
             if (noteTitleInput) noteTitleInput.value = noteData.title || '';
             if (noteContentTextarea) noteContentTextarea.value = noteData.content || '';
             if (noteFolderSelect) noteFolderSelect.value = noteData.folder_id || "";
-
             currentNoteTags = noteData.tags || [];
             renderCurrentNoteTags();
             if (noteTagsInput) noteTagsInput.value = '';
-
             if (noteLastUpdated) {
-                noteLastUpdated.textContent = `Last updated: ${noteData.updated_at ? new Date(noteData.updated_at).toLocaleString() : 'Not saved to server'}`;
+                 noteLastUpdated.textContent = `Last updated: ${isNewTrulyOfflineNote ? 'Locally (unsynced)' : (noteData.updated_at ? new Date(noteData.updated_at).toLocaleString() : 'N/A')}`;
             }
-
             currentNoteIsSharedWithUser = (noteData.note_status === 'shared');
             const isReadOnly = currentNoteIsSharedWithUser && noteData.permission === 'read';
-
             if (noteTitleInput) noteTitleInput.disabled = isReadOnly;
             if (noteContentTextarea) noteContentTextarea.disabled = isReadOnly;
             if (noteFolderSelect) noteFolderSelect.disabled = isReadOnly;
             if (noteTagsInput) noteTagsInput.disabled = isReadOnly;
-
             currentNoteTagsDisplay.querySelectorAll('.remove-tag-btn').forEach(btn => btn.style.display = isReadOnly ? 'none' : 'inline');
-
             if (saveNoteBtn) saveNoteBtn.style.display = isReadOnly ? 'none' : 'inline-block';
-            if (shareNoteBtn) shareNoteBtn.style.display = (currentNoteIsSharedWithUser || !currentNoteId) ? 'none' : 'inline-block'; // Hide if shared TO user OR new unsaved note
-            if (deleteNoteBtn) deleteNoteBtn.style.display = (currentNoteIsSharedWithUser || !currentNoteId) ? 'none' : 'inline-block';// Hide if shared TO user OR new unsaved note
-            if (downloadNoteBtn) downloadNoteBtn.style.display = currentNoteId ? 'inline-block' : 'none';
-
+            if (shareNoteBtn) shareNoteBtn.style.display = (currentNoteIsSharedWithUser || !currentNoteId || isNewTrulyOfflineNote) ? 'none' : 'inline-block';
+            if (deleteNoteBtn) deleteNoteBtn.style.display = (currentNoteIsSharedWithUser || isNewTrulyOfflineNote) ? 'none' : 'inline-block'; // Allow deleting server note even if no ID yet, but hide for temp offline
+            if (downloadNoteBtn) downloadNoteBtn.style.display = (currentNoteId || isNewTrulyOfflineNote) ? 'inline-block' : 'none';
         } else {
             noteEditorPanel.classList.add('empty');
             editorContentWrapper.style.display = 'none';
-
             if (noteTitleInput) noteTitleInput.value = '';
             if (noteContentTextarea) noteContentTextarea.value = '';
             if (noteFolderSelect) noteFolderSelect.value = "";
@@ -429,77 +603,97 @@ document.addEventListener('DOMContentLoaded', function() {
             renderCurrentNoteTags();
             if (noteTagsInput) noteTagsInput.value = '';
             if (noteLastUpdated) noteLastUpdated.textContent = 'Last updated: N/A';
-
             if (noteTitleInput) noteTitleInput.disabled = false;
             if (noteContentTextarea) noteContentTextarea.disabled = false;
             if (noteFolderSelect) noteFolderSelect.disabled = false;
             if (noteTagsInput) noteTagsInput.disabled = false;
             if (saveNoteBtn) saveNoteBtn.style.display = 'inline-block';
-            if (shareNoteBtn) shareNoteBtn.style.display = 'none'; // Hide for new note initially
-            if (deleteNoteBtn) deleteNoteBtn.style.display = 'none'; // Hide for new note initially
+            if (shareNoteBtn) shareNoteBtn.style.display = 'none';
+            if (deleteNoteBtn) deleteNoteBtn.style.display = 'none';
             if (downloadNoteBtn) downloadNoteBtn.style.display = 'none';
         }
+        updateSyncToServerButtonVisibility();
     }
-
     function saveCurrentNote() {
         if (!noteTitleInput || !noteContentTextarea || !noteFolderSelect || (noteTitleInput.disabled && !isOfflineMode) ) return;
-
         const title = noteTitleInput.value.trim();
         const content = noteContentTextarea.value;
         const folderId = noteFolderSelect.value;
-        const tagNamesToSend = currentNoteTags.map(tag => tag.name);
+        const tagsToSaveLocally = currentNoteTags; // Save full objects locally
+        const tagNamesToServer = currentNoteTags.map(tag => tag.name);
+
+        const isNewNoteCurrently = !currentNoteId || currentNoteId.startsWith('temp_offline_');
 
         if (isOfflineMode) {
-            saveNoteToLocalStorage(currentNoteId, title, content, currentNoteTags);
-            // For phase 1, if offline, we *don't* attempt server save here.
-            // User must explicitly go online and sync.
-            // Update UI to reflect local save if needed (e.g. last updated time)
-            if (noteLastUpdated) noteLastUpdated.textContent = `Last saved locally: ${new Date().toLocaleString()}`;
-            if (!currentNoteId) { // It's a new note saved locally
-                 // This needs a strategy for how new offline notes are handled in the list.
-                 // For now, it's just saved to NEW_OFFLINE_NOTE_KEY.
-                 localNewNoteContent = { title, content, tags: currentNoteTags, folderId, isLocalNew: true, updated_at: new Date().toISOString() };
-                 showGlobalNotification("New note saved locally.", "info");
+            const noteIdToUseForLocal = currentNoteId || `temp_offline_${Date.now()}`;
+            saveNoteToLocalStorage(noteIdToUseForLocal, title, content, tagsToSaveLocally, folderId || null, isNewNoteCurrently);
+            if (isNewNoteCurrently && !currentNoteId) {
+                currentNoteId = noteIdToUseForLocal;
+                const newLocalForList = {
+                    id: currentNoteId, title, snippet: content.substring(0,100), updated_at: new Date().toISOString(),
+                    folder_id: folderId || null, tags: tagsToSaveLocally, note_status: 'local_new', isLocalNew: true
+                };
+                const existingIndex = allNotes.findIndex(n => n.id === currentNoteId);
+                if (existingIndex === -1) allNotes.unshift(newLocalForList);
+                else allNotes[existingIndex] = newLocalForList;
+                renderNoteList(allNotes);
+                setActiveNoteListItem(currentNoteId);
+            } else if (isNewNoteCurrently && currentNoteId.startsWith('temp_offline_')) {
+                 const existingNoteIndex = allNotes.findIndex(n => n.id === currentNoteId);
+                 if (existingNoteIndex !== -1) {
+                     allNotes[existingNoteIndex].title = title;
+                     allNotes[existingNoteIndex].snippet = content.substring(0,100);
+                     allNotes[existingNoteIndex].updated_at = new Date().toISOString();
+                     allNotes[existingNoteIndex].tags = tagsToSaveLocally;
+                     allNotes[existingNoteIndex].folder_id = folderId || null;
+                     renderNoteList(allNotes);
+                     setActiveNoteListItem(currentNoteId);
+                 }
+            } else if (currentNoteId) { // Existing server note, saved locally
+                 const existingNoteIndex = allNotes.findIndex(n => n.id === currentNoteId);
+                 if (existingNoteIndex !== -1) { // Update its offline indicator potentially
+                    allNotes[existingNoteIndex].updated_at = new Date().toISOString(); // Reflect local save time for sorting
+                    renderNoteList(allNotes);
+                    setActiveNoteListItem(currentNoteId);
+                 }
             }
-            return; // Stop here if in offline mode.
+            if (noteLastUpdated) noteLastUpdated.textContent = `Last saved locally: ${new Date().toLocaleString()}`;
+            showGlobalNotification("Note saved locally.", "success", 2000);
+            return;
         }
 
-        // Online mode: proceed to save to server
         let url;
         const formData = new FormData();
         formData.append('title', title);
         formData.append('content', content);
         if (folderId) formData.append('folder_id', folderId);
 
-        if (currentNoteId) {
+        if (currentNoteId && !currentNoteId.startsWith('temp_offline_')) {
             url = `../php/dashboard.php?action=update_note`;
             formData.append('note_id', currentNoteId);
         } else {
             url = '../php/dashboard.php?action=create_note';
         }
+        const tempOfflineIdBeingSynced = (currentNoteId && currentNoteId.startsWith('temp_offline_')) ? currentNoteId : null;
 
         fetch(url, { method: 'POST', body: formData })
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
                     showGlobalNotification(result.message || 'Note saved to server!', 'success');
-                    const savedNoteId = result.note_id || currentNoteId;
-                    currentNoteId = savedNoteId; // Update currentNoteId if it was a new note
+                    const savedNoteId = result.note_id;
 
-                    // If this was a new note that existed locally, clear its specific local new storage
-                    if (localNewNoteContent && result.note_id) {
-                        localStorage.removeItem(NEW_OFFLINE_NOTE_KEY);
-                        localNewNoteContent = null;
+                    if (tempOfflineIdBeingSynced) {
+                        removeNoteFromLocalStorage(tempOfflineIdBeingSynced);
                     }
-                    // Also clear any specific ID-based local storage for this note, as server is now canonical
                     if (savedNoteId) removeNoteFromLocalStorage(savedNoteId);
-
+                    currentNoteId = savedNoteId;
 
                     if (savedNoteId) {
-                        syncTagsForNote(savedNoteId, tagNamesToSend).then(() => {
-                            loadInitialData(() => { // Ensure data reloaded before trying to select
+                        syncTagsForNote(savedNoteId, tagNamesToServer).then(() => {
+                            loadInitialData(() => {
                                 setActiveNoteListItem(savedNoteId);
-                                loadNoteIntoEditor(savedNoteId); // Reload to get definitive server state
+                                loadNoteIntoEditor(savedNoteId);
                             });
                         }).catch(() => loadInitialData());
                     } else {
@@ -514,9 +708,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showGlobalNotification('An error occurred while saving the note to server.', 'error');
             });
     }
-
-    // ... (syncTagsForNote, deleteCurrentNote, and other functions remain the same) ...
-    function syncTagsForNote(noteId, tagsArray) {
+    function syncTagsForNote(noteId, tagsArray) { /* ... same ... */
         const formData = new FormData();
         formData.append('note_id', noteId);
         formData.append('tags', JSON.stringify(tagsArray));
@@ -538,24 +730,33 @@ document.addEventListener('DOMContentLoaded', function() {
             throw error;
         });
     }
-
-    function deleteCurrentNote() {
-        if (!currentNoteId || (noteTitleInput && noteTitleInput.disabled)) {
+    function deleteCurrentNote() { /* ... updated for temp offline notes ... */
+        if (!currentNoteId || (noteTitleInput && noteTitleInput.disabled && !currentNoteId.startsWith('temp_offline_'))) {
             showGlobalNotification("No note selected or cannot delete this note.", "info");
             return;
         }
-        if (!confirm(`Are you sure you want to delete the note "${escapeHTML(noteTitleInput.value)}"?`)) {
+        const noteToDeleteTitle = noteTitleInput ? noteTitleInput.value : "this note";
+        if (!confirm(`Are you sure you want to delete the note "${escapeHTML(noteToDeleteTitle)}"?`)) {
             return;
         }
+
+        if (currentNoteId.startsWith('temp_offline_')) {
+            removeNoteFromLocalStorage(currentNoteId);
+            showGlobalNotification('Offline note discarded.', 'success');
+            currentNoteId = null;
+            updateEditorState(null);
+            loadInitialData();
+            return;
+        }
+
         const formData = new FormData();
         formData.append('id', currentNoteId);
-
         fetch(`../php/dashboard.php?action=delete_note`, { method: 'POST', body: formData })
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
                     showGlobalNotification('Note deleted successfully!', 'success');
-                    removeNoteFromLocalStorage(currentNoteId); // Remove from local storage too
+                    removeNoteFromLocalStorage(currentNoteId);
                     currentNoteId = null;
                     updateEditorState(null);
                     loadInitialData();
@@ -569,56 +770,70 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-
     // --- Event Listeners Setup ---
+    // ... (event listeners setup, including workOfflineToggle and syncToServerBtn)
     function setupEventListeners() {
-        // ... (most existing event listeners remain the same) ...
-        if (newNoteBtn) { // Desktop New Note
+        if (newNoteBtn) {
             newNoteBtn.addEventListener('click', () => {
                 setActiveNoteListItem(null);
                 if (isOfflineMode) {
-                    localNewNoteContent = { title: "New Offline Note", content: "", tags: [], folder_id: null, isLocalNew: true, updated_at: new Date().toISOString() };
-                    updateEditorState(localNewNoteContent);
-                    if(noteTitleInput) noteTitleInput.focus();
-                    showGlobalNotification("New offline note started. Save to keep changes locally.", "info");
+                    const tempId = `temp_offline_${Date.now()}`;
+                    const newOfflineNoteData = {
+                        id: tempId, title: "New Offline Note", content: "",
+                        tags: [], folder_id: null, isLocalNew: true,
+                        updated_at: new Date().toISOString(), note_status: 'local_new'
+                    };
+                    saveNoteToLocalStorage(tempId, newOfflineNoteData.title, newOfflineNoteData.content, newOfflineNoteData.tags, newOfflineNoteData.folder_id, true);
+                    allNotes.unshift(newOfflineNoteData);
+                    renderNoteList(allNotes);
+                    setActiveNoteListItem(tempId); // Select the new temp note in the list
+                    updateEditorState(newOfflineNoteData); // Load this new temp note into editor
                 } else {
-                    updateEditorState(null); // Clears for new server note
-                    if(noteTitleInput) noteTitleInput.focus();
+                    updateEditorState(null);
                 }
+                if(noteTitleInput) noteTitleInput.focus();
                 if (window.innerWidth <= 768) setMobileView('editor');
             });
         }
-
         if (saveNoteBtn) saveNoteBtn.addEventListener('click', saveCurrentNote);
         if (deleteNoteBtn) deleteNoteBtn.addEventListener('click', deleteCurrentNote);
-
-        if (downloadNoteBtn) {
+        if (downloadNoteBtn) { /* ... same ... */
             downloadNoteBtn.addEventListener('click', () => {
-                if (currentNoteId) {
-                    window.location.href = `../php/dashboard.php?action=download_note&id=${currentNoteId}`;
-                } else if (isOfflineMode && localNewNoteContent) { // Download new offline note
-                    const content = localNewNoteContent.content;
-                    const title = localNewNoteContent.title || "new_offline_note";
-                    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${title.replace(/[^a-z0-9_\-\s\.]/ig, '').replace(/\s+/g, '_') || 'note'}.txt`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                let titleToUse = "note";
+                let contentToUse = "";
+                let noteIdForDownload = currentNoteId;
+
+                if (noteIdForDownload) {
+                    const noteData = loadNoteFromLocalStorage(noteIdForDownload) || allNotes.find(n => n.id === noteIdForDownload);
+                    if (noteData) {
+                        titleToUse = noteData.title || "note";
+                        if (!noteIdForDownload.startsWith('temp_offline_') && (!noteContentTextarea.value && noteData.snippet === noteData.content)) {
+                            window.location.href = `../php/dashboard.php?action=download_note&id=${noteIdForDownload}`;
+                            return;
+                        }
+                        contentToUse = noteContentTextarea.value;
+                    } else {
+                         showGlobalNotification("Note data not found for download.", "error"); return;
+                    }
+                } else {
+                    showGlobalNotification("No note selected to download.", "info"); return;
                 }
-                 else {
-                    showGlobalNotification("No note selected to download.", "info");
-                }
+
+                const blob = new Blob([contentToUse], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${titleToUse.replace(/[^a-z0-9_\-\s\.]/ig, '').replace(/\s+/g, '_') || 'note'}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
             });
         }
-
-        if (shareNoteBtn) {
+        if (shareNoteBtn) { /* ... same ... */
             shareNoteBtn.addEventListener('click', () => {
-                if (!currentNoteId) {
-                    showGlobalNotification("Please select a note to share (must be saved to server).", "info"); return;
+                if (!currentNoteId || currentNoteId.startsWith('temp_offline_')) {
+                    showGlobalNotification("Please save the note to the server before sharing.", "info"); return;
                 }
                 if (currentNoteIsSharedWithUser) {
                     showGlobalNotification("This note is shared with you and cannot be re-shared.", "info"); return;
@@ -626,8 +841,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 openShareModal();
             });
         }
-        // ... (Folder Modals and Actions listeners) ...
-        if (newFolderBtn && newFolderModal && closeNewFolderModalBtn && confirmNewFolderBtn && newFolderNameInput) {
+        if (newFolderBtn && newFolderModal && closeNewFolderModalBtn && confirmNewFolderBtn && newFolderNameInput) { /* ... same ... */
             newFolderBtn.addEventListener('click', () => {
                 if(newFolderNameInput) newFolderNameInput.value = '';
                 if(newFolderModal) {
@@ -637,24 +851,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-         if (closeNewFolderModalBtn) {
+         if (closeNewFolderModalBtn) { /* ... same ... */
             closeNewFolderModalBtn.addEventListener('click', () => {
                 if (newFolderModal) newFolderModal.style.display = 'none';
             });
         }
-        if (confirmNewFolderBtn && newFolderNameInput) {
+        if (confirmNewFolderBtn && newFolderNameInput) {  /* ... same ... */
              confirmNewFolderBtn.addEventListener('click', () => {
                 const folderName = newFolderNameInput.value.trim();
                 if (folderName) createFolder(folderName);
                 else showGlobalNotification("Folder name cannot be empty.", "error");
             });
         }
-        if (closeRenameFolderModalBtn && renameFolderModal) {
+        if (closeRenameFolderModalBtn && renameFolderModal) {  /* ... same ... */
             closeRenameFolderModalBtn.addEventListener('click', () => {
                 if (renameFolderModal) renameFolderModal.style.display = 'none';
             });
         }
-        if (renameFolderModal) {
+        if (renameFolderModal) {  /* ... same ... */
             const form = renameFolderModal.querySelector('form');
             if (form && confirmRenameFolderBtn && renameFolderNameInput && renameFolderIdInput) {
                 form.addEventListener('submit', (e) => {
@@ -673,7 +887,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         }
-        [newFolderModal, renameFolderModal, shareNoteModal].forEach(modal => {
+        [newFolderModal, renameFolderModal, shareNoteModal, qrCodeModal].forEach(modal => { // Added qrCodeModal
             if (modal) {
                 const closeBtn = modal.querySelector('.close-button');
                 if (closeBtn) closeBtn.addEventListener('click', () => modal.style.display = 'none');
@@ -682,7 +896,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         });
-        if (shareNoteForm) {
+        if (shareNoteForm) { /* ... same ... */
             shareNoteForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 const formData = new FormData(shareNoteForm);
@@ -706,9 +920,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             });
         }
-
-        // ... (Sidebar Navigation listeners) ...
-        if (folderListUl) {
+        if (folderListUl) { /* ... same ... */
             folderListUl.addEventListener('click', (e) => {
                 const anchor = e.target.closest('a[data-folder-id]');
                 if (anchor && !e.target.closest('button')) {
@@ -720,7 +932,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        if (tagListUl) {
+        if (tagListUl) { /* ... same ... */
             tagListUl.addEventListener('click', (e) => {
                 const anchor = e.target.closest('a[data-tag-id]');
                 if (anchor) {
@@ -740,7 +952,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        const clearTagFiltersBtn = document.getElementById('clearTagFiltersBtn');
+        const clearTagFiltersBtn = document.getElementById('clearTagFiltersBtn'); /* ... same ... */
         if (clearTagFiltersBtn) {
             clearTagFiltersBtn.addEventListener('click', () => {
                 activeFilterTags = [];
@@ -751,12 +963,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 else filterNotesByActiveTags();
             });
         }
-
-        // ... (Editor Formatting & Tag Input listeners) ...
-        if (formatBoldBtn) formatBoldBtn.addEventListener('click', () => applyMarkdownFormatting('**', '**'));
-        if (formatItalicBtn) formatItalicBtn.addEventListener('click', () => applyMarkdownFormatting('*', '*'));
-        if (formatUnderlineBtn) formatUnderlineBtn.addEventListener('click', () => applyMarkdownFormatting('__', '__'));
-        if (noteContentTextarea) {
+        if (formatBoldBtn) formatBoldBtn.addEventListener('click', () => applyMarkdownFormatting('**', '**')); /* ... same ... */
+        if (formatItalicBtn) formatItalicBtn.addEventListener('click', () => applyMarkdownFormatting('*', '*')); /* ... same ... */
+        if (formatUnderlineBtn) formatUnderlineBtn.addEventListener('click', () => applyMarkdownFormatting('__', '__')); /* ... same ... */
+        if (noteContentTextarea) { /* ... same ... */
             noteContentTextarea.addEventListener('keydown', function(e) {
                 if (e.ctrlKey || e.metaKey) {
                     switch (e.key.toLowerCase()) {
@@ -767,7 +977,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        if (noteTagsInput) {
+        if (noteTagsInput) { /* ... same ... */
             noteTagsInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter' || e.key === ',') {
                     e.preventDefault();
@@ -787,31 +997,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 }, 150);
             });
         }
-        if (searchNotesInput) {
+        if (searchNotesInput) { /* ... same ... */
             searchNotesInput.addEventListener('input', (e) => {
                 filterNotesBySearch(e.target.value);
                  if (window.innerWidth <= 768) setMobileView('list');
             });
         }
-
-        // --- Mobile Footer Menu & Work Offline Toggle Event Listeners ---
-        if (mobileNewNoteBtn) {
+        if (mobileNewNoteBtn) { /* ... updated for new offline note handling ... */
             mobileNewNoteBtn.addEventListener('click', () => {
                 setActiveNoteListItem(null);
                 if (isOfflineMode) {
-                    localNewNoteContent = { title: "New Offline Note", content: "", tags: [], folder_id: null, isLocalNew: true, updated_at: new Date().toISOString() };
-                    updateEditorState(localNewNoteContent);
-                    if(noteTitleInput) noteTitleInput.focus();
+                    const tempId = `temp_offline_${Date.now()}`;
+                    const newOfflineNoteData = {
+                        id: tempId, title: "New Offline Note", content: "",
+                        tags: [], folder_id: null, isLocalNew: true,
+                        updated_at: new Date().toISOString(), note_status: 'local_new'
+                    };
+                    saveNoteToLocalStorage(tempId, newOfflineNoteData.title, newOfflineNoteData.content, newOfflineNoteData.tags, newOfflineNoteData.folder_id, true);
+                    allNotes.unshift(newOfflineNoteData);
+                    renderNoteList(allNotes);
+                    setActiveNoteListItem(tempId);
+                    updateEditorState(newOfflineNoteData);
                 } else {
                     updateEditorState(null);
-                    if(noteTitleInput) noteTitleInput.focus();
                 }
+                if(noteTitleInput) noteTitleInput.focus();
                 setMobileView('editor');
-                if(mobileNewNoteBtn) mobileNewNoteBtn.classList.add('active');
+                if(mobileNewNoteBtn) {
+                     mobileFooterIcons.forEach(i => i.classList.remove('active'));
+                     mobileNewNoteBtn.classList.add('active');
+                }
             });
         }
-        // ... (other mobile footer listeners) ...
-        if (mobileToggleSidebarBtn && sidebar) {
+        if (mobileToggleSidebarBtn && sidebar) { /* ... same ... */
             mobileToggleSidebarBtn.addEventListener('click', () => {
                 sidebar.classList.toggle('open');
                 if (sidebar.classList.contains('open')) {
@@ -821,106 +1039,133 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        if (mobileSearchBtn && searchNotesInput) {
+        if (mobileSearchBtn && searchNotesInput) { /* ... same ... */
             mobileSearchBtn.addEventListener('click', () => {
                 setMobileView('list');
                 searchNotesInput.focus();
+                mobileFooterIcons.forEach(i => i.classList.remove('active'));
                 if(mobileSearchBtn) mobileSearchBtn.classList.add('active');
             });
         }
-        if (mobileUserBtn) {
+        if (mobileUserBtn) {  /* ... same ... */
             mobileUserBtn.addEventListener('click', () => {
                 showGlobalNotification("User settings/profile not yet implemented.", "info");
             });
         }
-
-
-        if (workOfflineToggle) {
-            workOfflineToggle.addEventListener('change', function() {
+        if (workOfflineToggle) { /* ... updated ... */
+            workOfflineToggle.addEventListener('change', async function() {
                 const newOfflineState = this.checked;
-                if (newOfflineState === isOfflineMode) return; // No change
+                if (newOfflineState === isOfflineMode) return;
 
-                if (newOfflineState) { // Switching TO Offline
+                if (newOfflineState) {
                     isOfflineMode = true;
                     localStorage.setItem('notepadsly_offline_mode_enabled', 'true');
                     if(offlineModeIndicator) offlineModeIndicator.style.display = 'inline';
-                    showGlobalNotification("Offline mode enabled. Current note changes will be saved locally.", "info");
-                    // If a note is loaded, save its current state to local storage immediately
-                    if (currentNoteId && noteTitleInput && noteContentTextarea) {
-                        saveNoteToLocalStorage(currentNoteId, noteTitleInput.value, noteContentTextarea.value, currentNoteTags);
-                    } else if (!currentNoteId && (noteTitleInput.value || noteContentTextarea.value)) { // New unsaved note
-                        localNewNoteContent = { title: noteTitleInput.value, content: noteContentTextarea.value, tags: currentNoteTags, isLocalNew: true, updated_at: new Date().toISOString() };
-                        saveNoteToLocalStorage(null, localNewNoteContent.title, localNewNoteContent.content, localNewNoteContent.tags);
+                    showGlobalNotification("Offline mode enabled.", "info");
+                    if (currentNoteId && noteTitleInput && noteContentTextarea) { // Save existing note locally
+                        saveNoteToLocalStorage(currentNoteId, noteTitleInput.value, noteContentTextarea.value, currentNoteTags, noteFolderSelect.value, currentNoteId.startsWith('temp_offline_'));
+                    } else if (!currentNoteId && (noteTitleInput.value || noteContentTextarea.value)) { // New unsaved note in editor
+                        const tempId = `temp_offline_${Date.now()}`;
+                        saveNoteToLocalStorage(tempId, noteTitleInput.value, noteContentTextarea.value, currentNoteTags, noteFolderSelect.value, true);
+                        currentNoteId = tempId;
+                        const newLocalForList = {
+                            id: currentNoteId, title: noteTitleInput.value, snippet: noteContentTextarea.value.substring(0,100),
+                            updated_at: new Date().toISOString(),
+                            folder_id: noteFolderSelect.value || null, tags: currentNoteTags, note_status: 'local_new', isLocalNew: true
+                        };
+                        allNotes.unshift(newLocalForList);
+                        renderNoteList(allNotes);
+                        setActiveNoteListItem(currentNoteId);
+                         updateEditorState(newLocalForList); // Refresh editor for the new temp ID
                     }
-                } else { // Switching TO Online
-                    const unsyncedNoteId = currentNoteId; // Note that was active when switching
-                    const unsyncedNewNote = localNewNoteContent;
+                } else {
+                    showGlobalNotification("Switching to Online Mode... Attempting to sync.", "info", 3000);
+                    await syncAllOfflineNotesToServer();
 
-                    let syncPromise = Promise.resolve();
-
-                    if (unsyncedNoteId) {
-                        const localNote = loadNoteFromLocalStorage(unsyncedNoteId);
-                        if (localNote) {
-                            if (confirm("You have unsaved offline changes for the current note. Sync to server? Choosing 'Cancel' will discard offline changes for this note when going online.")) {
-                                // Populate editor to ensure saveCurrentNote has the right content
-                                if(noteTitleInput) noteTitleInput.value = localNote.title;
-                                if(noteContentTextarea) noteContentTextarea.value = localNote.content;
-                                currentNoteTags = localNote.tags || []; renderCurrentNoteTags();
-                                // saveCurrentNote will now save to server because isOfflineMode will be false
-                                // We must set isOfflineMode to false *before* calling saveCurrentNote
-                                isOfflineMode = false;
-                                localStorage.setItem('notepadsly_offline_mode_enabled', 'false');
-                                if(offlineModeIndicator) offlineModeIndicator.style.display = 'none';
-                                syncPromise = saveCurrentNote(); // This now returns undefined, need to adapt or just proceed
-                            } else {
-                                removeNoteFromLocalStorage(unsyncedNoteId); // Discard local changes
-                            }
-                        }
-                    } else if (unsyncedNewNote) { // New note created while offline
-                         if (confirm("You have a new note created offline. Save it to the server? Choosing 'Cancel' will discard this new offline note.")) {
-                            if(noteTitleInput) noteTitleInput.value = unsyncedNewNote.title;
-                            if(noteContentTextarea) noteContentTextarea.value = unsyncedNewNote.content;
-                            currentNoteTags = unsyncedNewNote.tags || []; renderCurrentNoteTags();
-                            isOfflineMode = false;
-                            localStorage.setItem('notepadsly_offline_mode_enabled', 'false');
-                            if(offlineModeIndicator) offlineModeIndicator.style.display = 'none';
-                            syncPromise = saveCurrentNote(); // Will create a new note on server
-                         } else {
-                            localStorage.removeItem(NEW_OFFLINE_NOTE_KEY);
-                            localNewNoteContent = null;
-                         }
-                    }
-
-                    // After potential sync, finalize going online
                     isOfflineMode = false;
                     localStorage.setItem('notepadsly_offline_mode_enabled', 'false');
                     if(offlineModeIndicator) offlineModeIndicator.style.display = 'none';
-                    showGlobalNotification("Online mode enabled.", "info");
 
-                    // Regardless of sync choice for current note, reload all data from server
-                    // and potentially reload current note from server to ensure consistency
-                    Promise.resolve(syncPromise).finally(() => {
-                        loadInitialData(() => {
-                            if (currentNoteId) { // If a note was active, reload it from server
-                                loadNoteIntoEditor(currentNoteId);
-                            } else {
-                                updateEditorState(null); // Or clear editor
-                            }
-                        });
+                    loadInitialData(() => {
+                        if (currentNoteId && !currentNoteId.startsWith('temp_offline_')) {
+                            loadNoteIntoEditor(currentNoteId);
+                        } else {
+                            updateEditorState(null);
+                        }
                     });
+                }
+                updateSyncToServerButtonVisibility();
+            });
+        }
+        syncToServerBtn.addEventListener('click', async () => { /* ... same ... */
+            if (isOfflineMode) {
+                showGlobalNotification("Please switch to Online mode to sync.", "info");
+                return;
+            }
+            await syncAllOfflineNotesToServer();
+            loadInitialData(() => {
+                if (currentNoteId && !currentNoteId.startsWith('temp_offline_')) {
+                    loadNoteIntoEditor(currentNoteId);
+                } else {
+                     updateEditorState(null);
+                }
+            });
+        });
+
+        // QR Code Button Listener
+        if (qrCodeNoteBtn) {
+            qrCodeNoteBtn.addEventListener('click', () => {
+                if (currentNoteId && !currentNoteId.startsWith('temp_offline_')) {
+                    const noteUrl = `${window.location.origin}/dashboard#note=${currentNoteId}`;
+                    if (qrCodeCanvasContainer && qrCodeModal && qrCodeUrlDisplay) {
+                        qrCodeCanvasContainer.innerHTML = ''; // Clear previous QR
+                        try {
+                            if (qrCodeInstance) { // qrcode.js library might reuse instance or need clearing
+                                qrCodeInstance.clear();
+                                qrCodeInstance.makeCode(noteUrl);
+                            } else {
+                                qrCodeInstance = new QRCode(qrCodeCanvasContainer, {
+                                    text: noteUrl,
+                                    width: 180,
+                                    height: 180,
+                                    colorDark : "#000000",
+                                    colorLight : "#ffffff",
+                                    correctLevel : QRCode.CorrectLevel.H
+                                });
+                            }
+                            qrCodeUrlDisplay.value = noteUrl;
+                            qrCodeModal.style.display = 'flex';
+                        } catch(e) {
+                            console.error("QR Code generation failed:", e);
+                            showGlobalNotification("Failed to generate QR code.", "error");
+                        }
+                    }
+                } else {
+                    showGlobalNotification("Please save the note to the server to generate a shareable QR code.", "info");
+                }
+            });
+        }
+        if(closeQrCodeModalBtn && qrCodeModal) {
+            closeQrCodeModalBtn.addEventListener('click', () => qrCodeModal.style.display = 'none');
+        }
+        if(copyQrCodeUrlBtn && qrCodeUrlDisplay) {
+            copyQrCodeUrlBtn.addEventListener('click', () => {
+                qrCodeUrlDisplay.select();
+                try {
+                    document.execCommand('copy');
+                    showGlobalNotification("Link copied to clipboard!", "success", 2000);
+                } catch (err) {
+                    showGlobalNotification("Failed to copy link.", "error");
                 }
             });
         }
 
-    }
+
+    } // End of setupEventListeners
 
     // --- Folder, Tag, Search, Formatting, Share Modal functions ---
-    // ... (All these existing functions: createFolder, openRenameFolderModal, renameFolder, confirmDeleteFolder, deleteFolder,
-    //      filterNotesByFolder, filterNotesByActiveTags, updateClearTagFiltersButton, filterNotesBySearch,
-    //      applyMarkdownFormatting, handleTagInput, handleTagInputKeyDown, updateSuggestionSelection, addTagToCurrentNote,
-    //      openShareModal, loadSharedWithUsers, confirmRevokeAccess, revokeAccess
-    //      remain largely the same as in the previous complete version of the file)
-    function createFolder(folderName) {
+    // ... (All these existing functions remain largely the same)
+    function createFolder(folderName) { /* ... same ... */
         const formData = new FormData();
         formData.append('name', folderName);
         fetch('../php/dashboard.php?action=create_folder', { method: 'POST', body: formData})
@@ -938,8 +1183,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showGlobalNotification("An error occurred while creating the folder.", 'error');
             });
     }
-
-    function openRenameFolderModal(folderId, currentName) {
+    function openRenameFolderModal(folderId, currentName) { /* ... same ... */
         if (renameFolderModal && renameFolderNameInput && renameFolderIdInput) {
             renameFolderNameInput.value = currentName;
             renameFolderIdInput.value = folderId;
@@ -949,8 +1193,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renameFolderNameInput.focus();
         }
     }
-
-    function renameFolder(folderId, newName) {
+    function renameFolder(folderId, newName) { /* ... same ... */
         const formData = new FormData();
         formData.append('folder_id', folderId);
         formData.append('name', newName);
@@ -969,14 +1212,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 showGlobalNotification("An error occurred while renaming the folder.", 'error');
             });
     }
-
-    function confirmDeleteFolder(folderId, folderName) {
+    function confirmDeleteFolder(folderId, folderName) { /* ... same ... */
         if (confirm(`Are you sure you want to delete the folder "${escapeHTML(folderName)}"? Notes in this folder will be moved to "All Notes".`)) {
             deleteFolder(folderId);
         }
     }
-
-    function deleteFolder(folderId) {
+    function deleteFolder(folderId) { /* ... same ... */
         const formData = new FormData();
         formData.append('folder_id', folderId);
         fetch('../php/dashboard.php?action=delete_folder', { method: 'POST', body: formData})
@@ -994,36 +1235,31 @@ document.addEventListener('DOMContentLoaded', function() {
                 showGlobalNotification("An error occurred while deleting the folder.", 'error');
             });
     }
-
-    function filterNotesByFolder(folderId) {
+    function filterNotesByFolder(folderId) { /* ... same ... */
         activeFilterTags = [];
         document.querySelectorAll('#tagList a.active-filter').forEach(el => el.classList.remove('active-filter'));
         updateClearTagFiltersButton();
-
         let notesToDisplay;
         if (folderId === 'all') {
             notesToDisplay = allNotes;
         } else {
-            notesToDisplay = allNotes.filter(note => note.folder_id == folderId && note.note_status === 'owner');
+            notesToDisplay = allNotes.filter(note => note.folder_id == folderId && (note.note_status === 'owner' || note.note_status === 'local_new'));
         }
         renderNoteList(notesToDisplay);
         updateEditorState(null);
         setActiveNoteListItem(null);
     }
-
-    function filterNotesByActiveTags() {
+    function filterNotesByActiveTags() { /* ... same ... */
         let notesToFilter = [];
         const activeFolderLink = folderListUl.querySelector('a.active');
         const activeFolderId = (activeFolderLink && activeFolderLink.dataset.folderId !== 'all')
                                ? activeFolderLink.dataset.folderId
                                : null;
-
         if (activeFolderId) {
-            notesToFilter = allNotes.filter(note => note.folder_id == activeFolderId && note.note_status === 'owner');
+            notesToFilter = allNotes.filter(note => note.folder_id == activeFolderId && (note.note_status === 'owner' || note.note_status === 'local_new'));
         } else {
             notesToFilter = allNotes;
         }
-
         if (activeFilterTags.length === 0) {
             renderNoteList(notesToFilter);
         } else {
@@ -1038,21 +1274,18 @@ document.addEventListener('DOMContentLoaded', function() {
         updateEditorState(null);
         setActiveNoteListItem(null);
     }
-
-    function updateClearTagFiltersButton() {
+    function updateClearTagFiltersButton() { /* ... same ... */
         const clearTagFiltersBtn = document.getElementById('clearTagFiltersBtn');
         if (clearTagFiltersBtn) {
             clearTagFiltersBtn.style.display = activeFilterTags.length > 0 ? 'inline-block' : 'none';
         }
     }
-
-    function filterNotesBySearch(searchTerm) {
+    function filterNotesBySearch(searchTerm) { /* ... same ... */
         const lowerSearchTerm = searchTerm.toLowerCase();
         activeFilterTags = [];
         document.querySelectorAll('#tagList a.active-filter').forEach(el => el.classList.remove('active-filter'));
         updateClearTagFiltersButton();
         setActiveFolderListItem('all');
-
         const filteredNotes = allNotes.filter(note => {
             const titleMatch = note.title && note.title.toLowerCase().includes(lowerSearchTerm);
             const contentMatch = note.snippet && note.snippet.toLowerCase().includes(lowerSearchTerm);
@@ -1063,17 +1296,13 @@ document.addEventListener('DOMContentLoaded', function() {
         updateEditorState(null);
         setActiveNoteListItem(null);
     }
-
-    let suggestionIdx = -1;
-
-    function applyMarkdownFormatting(prefix, suffix) {
+    function applyMarkdownFormatting(prefix, suffix) { /* ... same ... */
         if (!noteContentTextarea || noteContentTextarea.disabled) return;
         const start = noteContentTextarea.selectionStart;
         const end = noteContentTextarea.selectionEnd;
         const selectedText = noteContentTextarea.value.substring(start, end);
         const textBefore = noteContentTextarea.value.substring(0, start);
         const textAfter = noteContentTextarea.value.substring(end);
-
         if (selectedText.length > 0 && selectedText.startsWith(prefix) && selectedText.endsWith(suffix)) {
             const unwrappedText = selectedText.substring(prefix.length, selectedText.length - suffix.length);
             noteContentTextarea.value = textBefore + unwrappedText + textAfter;
@@ -1099,23 +1328,19 @@ document.addEventListener('DOMContentLoaded', function() {
         noteContentTextarea.focus();
         noteContentTextarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
-
-    function handleTagInput() {
+    function handleTagInput() { /* ... same ... */
         if (!noteTagsInput || !tagSuggestionsUl || !allUserUniqueTags) return;
         const inputText = noteTagsInput.value.trim().toLowerCase();
         tagSuggestionsUl.innerHTML = '';
         suggestionIdx = -1;
-
         if (!inputText) {
             tagSuggestionsUl.style.display = 'none';
             return;
         }
-
         const suggestions = allUserUniqueTags.filter(tag =>
             tag.name.toLowerCase().includes(inputText) &&
             !currentNoteTags.some(currentTag => currentTag.name === tag.name.toLowerCase())
         );
-
         if (suggestions.length > 0) {
             suggestions.slice(0, 5).forEach(tag => {
                 const li = document.createElement('li');
@@ -1132,12 +1357,10 @@ document.addEventListener('DOMContentLoaded', function() {
             tagSuggestionsUl.style.display = 'none';
         }
     }
-
-    function handleTagInputKeyDown(e) {
+    function handleTagInputKeyDown(e) { /* ... same ... */
         if (!tagSuggestionsUl || tagSuggestionsUl.style.display === 'none') return;
         const items = tagSuggestionsUl.querySelectorAll('li');
         if (items.length === 0) return;
-
         if (e.key === 'ArrowDown') {
             e.preventDefault();
             suggestionIdx = (suggestionIdx + 1) % items.length;
@@ -1153,8 +1376,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tagSuggestionsUl.style.display = 'none';
         }
     }
-
-    function updateSuggestionSelection(items) {
+    function updateSuggestionSelection(items) { /* ... same ... */
         items.forEach((item, index) => {
             if (index === suggestionIdx) {
                 item.classList.add('selected');
@@ -1164,8 +1386,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
-    function addTagToCurrentNote(tagName) {
+    function addTagToCurrentNote(tagName) { /* ... same ... */
         const normalizedTagName = tagName.trim().toLowerCase();
         if (normalizedTagName && !currentNoteTags.some(t => t.name === normalizedTagName)) {
             const existingGlobalTag = allUserUniqueTags.find(globalTag => globalTag.name === normalizedTagName);
@@ -1173,23 +1394,19 @@ document.addEventListener('DOMContentLoaded', function() {
             renderCurrentNoteTags();
         }
     }
-
-    function openShareModal() {
+    function openShareModal() { /* ... same ... */
         if (shareNoteModal && shareNoteIdInput && shareNoteForm) {
             shareNoteForm.reset();
             if(currentlySharedWithListUl) currentlySharedWithListUl.innerHTML = '';
             if(noSharedUsersMsgLi) noSharedUsersMsgLi.style.display = 'block';
-
             shareNoteIdInput.value = currentNoteId;
             loadSharedWithUsers(currentNoteId);
             shareNoteModal.style.display = 'flex';
             if(shareWithUserInput) shareWithUserInput.focus();
         }
     }
-
-    function loadSharedWithUsers(noteId) {
+    function loadSharedWithUsers(noteId) { /* ... same ... */
         if (!currentlySharedWithListUl || !noSharedUsersMsgLi) return;
-
         fetch(`../php/dashboard.php?action=get_shared_with_users&note_id=${noteId}`)
             .then(response => response.json())
             .then(data => {
@@ -1222,18 +1439,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 showGlobalNotification('Error fetching shared user list.', 'error');
             });
     }
-
-    function confirmRevokeAccess(noteId, sharedUserId, username) {
+    function confirmRevokeAccess(noteId, sharedUserId, username) { /* ... same ... */
         if (confirm(`Are you sure you want to revoke access to this note for ${escapeHTML(username)}?`)) {
             revokeAccess(noteId, sharedUserId);
         }
     }
-
-    function revokeAccess(noteId, sharedUserId) {
+    function revokeAccess(noteId, sharedUserId) { /* ... same ... */
         const formData = new FormData();
         formData.append('note_id', noteId);
         formData.append('shared_user_id', sharedUserId);
-
         fetch('../php/dashboard.php?action=revoke_note_access', { method: 'POST', body: formData})
             .then(response => response.json())
             .then(data => {
@@ -1250,8 +1464,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showGlobalNotification('An error occurred while revoking access.', 'error');
             });
     }
-
-    function checkScreenWidth() {
+    function checkScreenWidth() { /* ... same ... */
         const isMobile = window.innerWidth <= 768;
         if (isMobile) {
             if (!appBody.classList.contains('mobile-view-list') &&
@@ -1266,33 +1479,28 @@ document.addEventListener('DOMContentLoaded', function() {
             if(noteEditorPanel) noteEditorPanel.style.display = '';
         }
     }
-
-    function setMobileView(viewName) {
+    function setMobileView(viewName) {  /* ... same ... */
         currentMobileView = viewName;
         appBody.classList.remove('mobile-view-list', 'mobile-view-editor', 'mobile-view-sidebar');
         appBody.classList.add(`mobile-view-${viewName}`);
-
         mobileFooterIcons.forEach(icon => icon.classList.remove('active'));
         if (viewName === 'sidebar' && mobileToggleSidebarBtn) {
             mobileToggleSidebarBtn.classList.add('active');
-        } else if (viewName === 'list' && mobileSearchBtn) { // Example: highlight search when list is main view
-            // mobileSearchBtn.classList.add('active'); // This might be too aggressive if user didn't click search
-        } else if (viewName === 'editor' && mobileNewNoteBtn.classList.contains('temp-active')) {
-            // Keep new note active if it led here
-            mobileNewNoteBtn.classList.remove('temp-active'); // consume
-            mobileNewNoteBtn.classList.add('active');
+        } else if (viewName === 'list' && mobileSearchBtn) {
+        } else if (viewName === 'editor' && document.querySelector('#mobileNewNoteBtn.active')) {
         }
+        const tempActiveNewNote = document.querySelector('#mobileNewNoteBtn.temp-active');
+        if(tempActiveNewNote) tempActiveNewNote.classList.remove('temp-active');
     }
 
     // --- Utility Functions ---
-    function escapeHTML(str) {
+    function escapeHTML(str) { /* ... same ... */
         if (str === null || str === undefined) return '';
         return String(str).replace(/[&<>"']/g, function (match) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match];
         });
     }
-
-    function clearFormErrors(formElement) {
+    function clearFormErrors(formElement) {  /* ... same ... */
         if (!formElement) return;
         const errorMessages = formElement.querySelectorAll('.error-message');
         errorMessages.forEach(el => el.textContent = '');
@@ -1303,6 +1511,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 let notificationTimeout;
 function showGlobalNotification(message, type = 'info', duration = 3000) {
+    // ... (showGlobalNotification implementation remains the same)
     const notificationElement = document.getElementById('globalNotification');
     if (!notificationElement) return;
     clearTimeout(notificationTimeout);
