@@ -176,3 +176,17 @@ table .actions-cell .delete-btn:hover {
     font-size: 0.95rem;
     color: #555;
 }
+
+.asset-preview-container {
+    margin-top: 8px;
+}
+.asset-preview-container small {
+    display: block;
+    margin-bottom: 4px;
+    color: #6c757d;
+}
+.asset-preview-container img {
+    border: 1px solid #ddd;
+    padding: 2px;
+    background-color: #f8f9fa;
+}

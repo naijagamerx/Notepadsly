@@ -141,7 +141,14 @@
                     <label for="shareWithUserInput">Share with (Username or Email):</label>
                     <input type="text" id="shareWithUserInput" name="share_with_user" required>
                 </div>
-                <button type="submit" class="button-primary">Share With User</button>
+                <div class="form-group">
+                    <label for="sharePermissionInput">Permission:</label>
+                    <select id="sharePermissionInput" name="permission">
+                        <option value="read" selected>Read-Only</option>
+                        <option value="edit">Edit</option>
+                    </select>
+                </div>
+                <button type="submit" class="button-primary">Share / Update Permission</button>
             </form>
             <hr>
             <h4>Currently Shared With:</h4>

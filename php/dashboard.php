@@ -24,12 +24,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'sync_note_tags' && $_SERVER['
         exit;
     }
 
-    // Ensure the note belongs to the user
+    // Ensure the note belongs to the user OR is shared with them with 'edit' permission
     $pdo = getDBConnection();
-    $stmt_note_check = $pdo->prepare("SELECT id FROM notes WHERE id = ? AND user_id = ?");
-    $stmt_note_check->execute([$note_id, $user_id]);
-    if (!$stmt_note_check->fetch()) {
-        echo json_encode(['success' => false, 'message' => 'Note not found or access denied.']);
+    $stmt_access_check = $pdo->prepare("
+        SELECT n.id
+        FROM notes n
+        LEFT JOIN shared_notes sn ON n.id = sn.note_id AND sn.shared_with_user_id = :current_user_id
+        WHERE n.id = :note_id AND (n.user_id = :current_user_id OR sn.permission = 'edit')
+    ");
+    $stmt_access_check->execute([':note_id' => $note_id, ':current_user_id' => $user_id]);
+    if (!$stmt_access_check->fetch()) {
+        echo json_encode(['success' => false, 'message' => 'Access denied to modify tags for this note or note not found.']);
         exit;
     }
 
@@ -238,7 +243,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'share_note' && $_SERVER['REQU
     header('Content-Type: application/json');
     $note_id_to_share = (int)($_POST['note_id'] ?? 0);
     $share_with_identifier = trim($_POST['share_with_user'] ?? ''); // Username or Email
-    $permission = 'read'; // Hardcoded to 'read' for Phase 1
+    $permission = trim($_POST['permission'] ?? 'read'); // Default to 'read'
+
+    if (!in_array($permission, ['read', 'edit'])) {
+        $permission = 'read'; // Default to read on invalid input
+    }
 
     if ($note_id_to_share <= 0 || empty($share_with_identifier)) {
         echo json_encode(['success' => false, 'message' => 'Note ID and target user are required.']);
@@ -273,16 +282,27 @@ if (isset($_GET['action']) && $_GET['action'] === 'share_note' && $_SERVER['REQU
         }
 
         // 4. Check if already shared with this user
-        $stmt_check_existing_share = $pdo->prepare("SELECT id FROM shared_notes WHERE note_id = ? AND shared_with_user_id = ?");
+        $stmt_check_existing_share = $pdo->prepare("SELECT id, permission FROM shared_notes WHERE note_id = ? AND shared_with_user_id = ?");
         $stmt_check_existing_share->execute([$note_id_to_share, $target_user_id]);
-        if ($stmt_check_existing_share->fetch()) {
-            // For Phase 1, if already shared, consider it a success or inform.
-            // Later, this could update permission if different.
-            echo json_encode(['success' => true, 'message' => 'Note is already shared with this user with read permission.']);
+        $existing_share = $stmt_check_existing_share->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing_share) {
+            if ($existing_share['permission'] === $permission) {
+                echo json_encode(['success' => true, 'message' => "Note is already shared with this user with '$permission' permission."]);
+            } else {
+                // Update permission for existing share
+                $stmt_update_permission = $pdo->prepare("UPDATE shared_notes SET permission = ? WHERE id = ?");
+                if ($stmt_update_permission->execute([$permission, $existing_share['id']])) {
+                    echo json_encode(['success' => true, 'message' => "Share permission updated to '$permission' for this user."]);
+                } else {
+                    log_error("Failed to update share permission for note ID $note_id_to_share, user ID $target_user_id", __FILE__, __LINE__);
+                    echo json_encode(['success' => false, 'message' => 'Failed to update share permission.']);
+                }
+            }
             exit;
         }
 
-        // 5. Insert into shared_notes
+        // 5. Insert new share record into shared_notes
         $stmt_insert_share = $pdo->prepare("INSERT INTO shared_notes (note_id, shared_with_user_id, shared_by_user_id, permission) VALUES (?, ?, ?, ?)");
         if ($stmt_insert_share->execute([$note_id_to_share, $target_user_id, $user_id, $permission])) {
             // --- Conceptual Email Notification ---
@@ -538,18 +558,53 @@ if (isset($_GET['action']) && $_GET['action'] === 'update_note' && isset($_POST[
 
     $pdo = getDBConnection();
     try {
+        // Check if user owns the note OR has 'edit' permission
+        $stmt_access_check = $pdo->prepare("
+            SELECT n.id
+            FROM notes n
+            LEFT JOIN shared_notes sn ON n.id = sn.note_id AND sn.shared_with_user_id = :current_user_id
+            WHERE n.id = :note_id AND (n.user_id = :current_user_id OR sn.permission = 'edit')
+        ");
+        $stmt_access_check->execute([':note_id' => $note_id, ':current_user_id' => $user_id]);
+        if (!$stmt_access_check->fetch()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied or note not found.']);
+            exit;
+        }
+
+        // If user is not the owner, they cannot change the folder_id (for simplicity in this phase)
+        // More complex logic could allow it if they have access to the target folder.
+        $can_change_folder = true;
         if ($folder_id !== null) {
-            $stmt_folder_check = $pdo->prepare("SELECT id FROM folders WHERE id = ? AND user_id = ?");
-            $stmt_folder_check->execute([$folder_id, $user_id]);
-            if (!$stmt_folder_check->fetch()) {
-                echo json_encode(['success' => false, 'message' => 'Invalid folder specified.']);
-                exit;
+            $stmt_owner = $pdo->prepare("SELECT user_id FROM notes WHERE id = ?");
+            $stmt_owner->execute([$note_id]);
+            $owner_of_note = $stmt_owner->fetchColumn();
+            if ($owner_of_note != $user_id) { // If current user is not owner but has edit share
+                 // For now, prevent shared editors from changing folder.
+                 // To allow, we'd need to check if the *original owner* owns the target folder_id.
+                 // Or, check if the shared user has access to that folder (if folders become shareable).
+                 // For simplicity, let's assume only owner can change folder.
+                 // If $folder_id from POST is different from current note's folder_id, deny.
+                $stmt_current_folder = $pdo->prepare("SELECT folder_id FROM notes WHERE id = ?");
+                $stmt_current_folder->execute([$note_id]);
+                $current_note_folder_id = $stmt_current_folder->fetchColumn();
+                if ($current_note_folder_id != $folder_id) { // Note: null vs int comparison
+                     echo json_encode(['success' => false, 'message' => 'Shared editors cannot change the note\'s folder.']);
+                     exit;
+                }
+            } else { // Current user is owner, validate folder ownership
+                 $stmt_folder_check = $pdo->prepare("SELECT id FROM folders WHERE id = ? AND user_id = ?");
+                 $stmt_folder_check->execute([$folder_id, $user_id]);
+                 if (!$stmt_folder_check->fetch()) {
+                     echo json_encode(['success' => false, 'message' => 'Invalid folder specified (not owned by you).']);
+                     exit;
+                 }
             }
         }
 
-        $stmt = $pdo->prepare("UPDATE notes SET title = ?, content = ?, folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?");
-        if ($stmt->execute([$title, $content, $folder_id, $note_id, $user_id])) {
-            // rowCount might be 0 if no actual data changed, still consider it a success.
+
+        $stmt = $pdo->prepare("UPDATE notes SET title = ?, content = ?, folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+        // Removed user_id from WHERE clause as access is already checked.
+        if ($stmt->execute([$title, $content, $folder_id, $note_id])) {
              echo json_encode(['success' => true, 'message' => 'Note updated successfully.']);
         } else {
             echo json_encode(['success' => false, 'message' => 'Failed to update note.']);
