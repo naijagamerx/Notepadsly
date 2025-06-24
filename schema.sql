@@ -68,6 +68,9 @@ CREATE TABLE shared_notes (
 ALTER TABLE users ADD COLUMN role ENUM('user', 'admin') DEFAULT 'user';
 ALTER TABLE users ADD COLUMN password_reset_token VARCHAR(255) DEFAULT NULL;
 ALTER TABLE users ADD COLUMN reset_token_expires_at TIMESTAMP NULL DEFAULT NULL;
+ALTER TABLE users ADD COLUMN twofa_secret VARCHAR(255) DEFAULT NULL;
+ALTER TABLE users ADD COLUMN twofa_enabled TINYINT(1) DEFAULT 0;
+ALTER TABLE users ADD COLUMN twofa_recovery_codes TEXT DEFAULT NULL; -- Store as JSON array of hashed codes
 
 -- For admin settings like logo, fav icon, SMTP (could be a key-value store or separate columns)
 CREATE TABLE admin_settings (

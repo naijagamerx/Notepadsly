@@ -23,6 +23,7 @@ RewriteRule ^login/?$ html/index.html [L] # Alias for login
 # These assume the html files are in the /html/ subdirectory
 RewriteRule ^dashboard/?$ html/dashboard.html [L]
 RewriteRule ^admin_dashboard/?$ html/admin_dashboard.html [L]
+RewriteRule ^reset-password/?$ php/reset_password.php [L]
 
 
 # --- Important considerations for assets (CSS, JS, images) ---

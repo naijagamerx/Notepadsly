@@ -35,16 +35,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Password is correct, set up session
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
-                $_SESSION['user_role'] = $user['role'];
-                $_SESSION['user_email'] = $user['email'];
-                // Regenerate session ID for security
-                session_regenerate_id(true);
+                // Password is correct, check for 2FA
+                if ($user['twofa_enabled'] == 1 && !empty($user['twofa_secret'])) {
+                    // 2FA is enabled, require OTP
+                    $_SESSION['2fa_user_id'] = $user['id']; // Store user ID for OTP verification step
+                    $_SESSION['2fa_pending'] = true;
+                    // session_regenerate_id(true); // Regenerate session ID here too for security before OTP step
 
-                $response['success'] = true;
-                $response['message'] = 'Login successful! Redirecting...';
-                // Include a redirect URL or let frontend handle it
-                $response['redirect_url'] = '/dashboard'; // Updated to extension-less URL
+                    $response['success'] = true; // Password was correct
+                    $response['twofa_required'] = true;
+                    $response['message'] = 'Password correct. Please enter your Two-Factor Authentication code.';
+                    // No redirect_url here, frontend will show OTP input
+                } else {
+                    // 2FA not enabled or no secret, proceed with normal login
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['user_role'] = $user['role'];
+                    $_SESSION['user_email'] = $user['email'];
+                    session_regenerate_id(true);
 
+                    $response['success'] = true;
+                    $response['message'] = 'Login successful! Redirecting...';
+                    $response['redirect_url'] = '/dashboard';
+                }
             } else {
                 // Invalid password
                 $response['message'] = 'Invalid username or password.';
