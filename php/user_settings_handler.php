@@ -1,14 +1,13 @@
 <?php
-require_once __DIR__ . '/config.php'; // Adjusted path
+require_once __DIR__ . '/config.php';
 
 // --- Conceptual TOTP Library Includes ---
-// Assuming library like RobThree/TwoFactorAuth is placed in php/lib/TwoFactorAuth
-// require_once __DIR__ . '/../lib/TwoFactorAuth/lib/TwoFactorAuth.php';
-// require_once __DIR__ . '/../lib/TwoFactorAuth/lib/Providers/Qr/BaconQrCodeProvider.php'; // Example QR provider
-// require_once __DIR__ . '/../lib/TwoFactorAuth/lib/Providers/Qr/GoogleChartsQrProvider.php'; // Alternative
-// require_once __DIR__ . '/../lib/TwoFactorAuth/lib/Providers/Qr/ImageChartsQrProvider.php'; // Alternative
-// For BaconQrCodeProvider, BaconQrCode library would also be needed.
-// For simplicity, we'll focus on the TwoFactorAuth class methods.
+// Assuming library like RobThree/TwoFactorAuth is placed in php/lib/
+// Adjust path if lib is inside php, e.g., __DIR__ . '/lib/TwoFactorAuth/...'
+require_once __DIR__ . '/../lib/TOTP/src/TwoFactorAuth.php'; // Main class
+// May need others depending on QR provider chosen by library, e.g.
+// require_once __DIR__ . '/../lib/TOTP/src/Providers/Qr/BaconQrCodeProvider.php';
+// require_once __DIR__ . '/../lib/BaconQrCode/src/Renderer/ImageRenderer.php'; // etc. for dependencies
 
 // --- Authentication Check ---
 if (!isset($_SESSION['user_id'])) {
@@ -17,7 +16,8 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 $user_id = $_SESSION['user_id'];
-$user_email_for_2fa = $_SESSION['user_email'] ?? 'user@example.com'; // Get from session for QR label
+// Ensure user_email is available in session for QR code label
+$user_email_for_2fa = $_SESSION['user_email'] ?? ('user' . $user_id . '@example.com'); // Fallback if not set
 $site_name_for_2fa = 'Notepadsly'; // Could also come from admin_settings
 
 header('Content-Type: application/json');
@@ -31,7 +31,7 @@ try {
     $action = $_POST['action'] ?? $_GET['action'] ?? null;
 
     switch ($action) {
-        case 'get_2fa_status': // New action to fetch current status for UI
+        case 'get_2fa_status':
             $stmt_status = $pdo->prepare("SELECT twofa_enabled FROM users WHERE id = ?");
             $stmt_status->execute([$user_id]);
             $is_enabled = (bool)$stmt_status->fetchColumn();
@@ -44,23 +44,25 @@ try {
                 break;
             }
 
-            // --- Real TOTP Library Usage (Conceptual) ---
-            // $tfa = new \RobThree\Auth\TwoFactorAuth($site_name_for_2fa);
-            // $new_secret = $tfa->createSecret(160); // 160 bits for good security
+            $tfa = new RobThree\Auth\TwoFactorAuth($site_name_for_2fa);
+            $new_secret = $tfa->createSecret(160); // Generate a 160-bit secret
 
-            // STUB for environments without the library:
-            $new_secret = 'STUB_BASE32_SECRET_' . strtoupper(bin2hex(random_bytes(10))); // Placeholder, mimics Base32-like format
-
-            $stmt_store_secret = $pdo->prepare("UPDATE users SET twofa_secret = ?, twofa_enabled = 0 WHERE id = ?"); // Store, but ensure it's disabled until verified
+            $stmt_store_secret = $pdo->prepare("UPDATE users SET twofa_secret = ?, twofa_enabled = 0 WHERE id = ?");
             if ($stmt_store_secret->execute([$new_secret, $user_id])) {
+                // Generate QR code URL data (data URI for inline image)
+                // Note: getQRCodeImageAsDataUri might require a QR library like BaconQrCode to be installed
+                // and a QR provider configured with $tfa if not using default.
+                // For simplicity, if direct data URI generation is problematic without full env,
+                // we can construct the otpauth:// URL and let JS render it.
                 // $qrCodeUrlData = $tfa->getQRCodeImageAsDataUri($user_email_for_2fa, $new_secret);
-                // STUB QR data:
-                $qr_code_url_data = "otpauth://totp/" . rawurlencode($site_name_for_2fa) . ":" . rawurlencode($user_email_for_2fa) . "?secret=" . $new_secret . "&issuer=" . rawurlencode($site_name_for_2fa);
+
+                // Constructing the otpauth:// URL for client-side QR generation
+                $qr_code_data_string = "otpauth://totp/" . rawurlencode($site_name_for_2fa) . ":" . rawurlencode($user_email_for_2fa) . "?secret=" . $new_secret . "&issuer=" . rawurlencode($site_name_for_2fa);
 
                 echo json_encode([
                     'success' => true,
                     'secret' => $new_secret,
-                    'qr_code_url_data' => $qr_code_url_data
+                    'qr_code_url_data' => $qr_code_data_string // Data for JS library to generate QR
                 ]);
             } else {
                 echo json_encode(['success' => false, 'message' => 'Failed to store 2FA secret.']);
@@ -68,31 +70,30 @@ try {
             break;
 
         case 'enable_2fa':
-            if (!$global_2fa_enabled) { /* ... */ }
+            if (!$global_2fa_enabled) { echo json_encode(['success' => false, 'message' => '2FA is not currently enabled by the site administrator.']); break; }
             $otp_code = trim($_POST['otp_code'] ?? '');
             $current_secret_stmt = $pdo->prepare("SELECT twofa_secret FROM users WHERE id = ?");
             $current_secret_stmt->execute([$user_id]);
             $current_secret = $current_secret_stmt->fetchColumn();
 
-            if (empty($current_secret)) { /* ... */ }
-            if (empty($otp_code)) { /* ... */ }
+            if (empty($current_secret)) { echo json_encode(['success' => false, 'message' => 'No 2FA secret found. Please generate one first.']); break; }
+            if (empty($otp_code)) { echo json_encode(['success' => false, 'message' => 'OTP code is required.']); break; }
 
-            // --- Real TOTP Library Usage (Conceptual) ---
-            // $tfa = new \RobThree\Auth\TwoFactorAuth($site_name_for_2fa);
-            // $is_valid_otp = $tfa->verifyCode($current_secret, $otp_code);
-            $is_valid_otp = ($otp_code === '123456' && !empty($current_secret)); // Updated STUB
+            $tfa = new RobThree\Auth\TwoFactorAuth($site_name_for_2fa);
+            $is_valid_otp = $tfa->verifyCode($current_secret, $otp_code);
+            // $is_valid_otp = ($otp_code === '123456' && !empty($current_secret)); // Old STUB
 
             if ($is_valid_otp) {
                 $plain_recovery_codes = [];
                 $hashed_recovery_codes = [];
                 for ($i = 0; $i < 10; $i++) {
-                    $code = strtoupper(bin2hex(random_bytes(5))); // 10-char hex
-                    $plain_recovery_codes[] = substr($code, 0, 5) . '-' . substr($code, 5); // Format like XXXXX-XXXXX
-                    $hashed_recovery_codes[] = password_hash($code, PASSWORD_DEFAULT); // Hash for storage
+                    $code = strtoupper(bin2hex(random_bytes(5)));
+                    $plain_recovery_codes[] = substr($code, 0, 5) . '-' . substr($code, 5);
+                    $hashed_recovery_codes[] = password_hash($code, PASSWORD_DEFAULT);
                 }
                 $hashed_recovery_codes_json = json_encode($hashed_recovery_codes);
 
-                $stmt_enable = $pdo->prepare("UPDATE users SET twofa_enabled = 1, twofa_recovery_codes = ? WHERE id = ? AND twofa_secret = ?"); // Ensure secret matches
+                $stmt_enable = $pdo->prepare("UPDATE users SET twofa_enabled = 1, twofa_recovery_codes = ? WHERE id = ? AND twofa_secret = ?");
                 if ($stmt_enable->execute([$hashed_recovery_codes_json, $user_id, $current_secret])) {
                     echo json_encode([
                         'success' => true,
@@ -108,8 +109,6 @@ try {
             break;
 
         case 'disable_2fa':
-            // For enhanced security, this should ideally require current OTP or password.
-            // For this phase, if user is logged in, allow direct disable.
             $stmt_disable = $pdo->prepare("UPDATE users SET twofa_enabled = 0, twofa_secret = NULL, twofa_recovery_codes = NULL WHERE id = ?");
             if ($stmt_disable->execute([$user_id])) {
                 echo json_encode(['success' => true, 'message' => '2FA disabled successfully.']);
@@ -126,7 +125,7 @@ try {
 } catch (PDOException $e) {
     log_error("User Settings Handler PDOException for action '$action': " . $e->getMessage(), __FILE__, __LINE__);
     echo json_encode(['success' => false, 'message' => 'A database error occurred.']);
-} catch (Exception $e) { // Catch broader exceptions like random_bytes issues
+} catch (Exception $e) {
     log_error("User Settings Handler Exception for action '$action': " . $e->getMessage(), __FILE__, __LINE__);
     echo json_encode(['success' => false, 'message' => 'An unexpected error occurred: ' . $e->getMessage()]);
 }
