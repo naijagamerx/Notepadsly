@@ -24,6 +24,7 @@ RewriteRule ^login/?$ html/index.html [L] # Alias for login
 RewriteRule ^dashboard/?$ html/dashboard.html [L]
 RewriteRule ^admin_dashboard/?$ html/admin_dashboard.html [L]
 RewriteRule ^reset-password/?$ php/reset_password.php [L]
+RewriteRule ^forgot-password/?$ php/forgot_password_page.php [L]
 
 
 # --- Important considerations for assets (CSS, JS, images) ---

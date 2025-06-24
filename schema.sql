@@ -71,6 +71,29 @@ ALTER TABLE users ADD COLUMN reset_token_expires_at TIMESTAMP NULL DEFAULT NULL;
 ALTER TABLE users ADD COLUMN twofa_secret VARCHAR(255) DEFAULT NULL;
 ALTER TABLE users ADD COLUMN twofa_enabled TINYINT(1) DEFAULT 0;
 ALTER TABLE users ADD COLUMN twofa_recovery_codes TEXT DEFAULT NULL; -- Store as JSON array of hashed codes
+ALTER TABLE users ADD COLUMN encryption_salt VARBINARY(16) DEFAULT NULL; -- For user-specific salt for note encryption key
+
+-- Change notes.title and notes.content to BLOB for encryption
+-- This is a conceptual change for schema.sql.
+-- In a live system, this would be an ALTER TABLE migration:
+-- ALTER TABLE notes MODIFY title BLOB;
+-- ALTER TABLE notes MODIFY content BLOB;
+-- For schema.sql, we'll just change the definition directly.
+
+-- Table: notes (Modified for encryption)
+DROP TABLE IF EXISTS notes; -- Drop if exists to redefine
+CREATE TABLE notes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    folder_id INT,
+    title BLOB, -- Encrypted
+    content BLOB, -- Encrypted
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
+);
+
 
 -- For admin settings like logo, fav icon, SMTP (could be a key-value store or separate columns)
 CREATE TABLE admin_settings (

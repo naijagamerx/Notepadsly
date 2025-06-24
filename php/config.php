@@ -95,4 +95,80 @@ function log_error($message, $file = '', $line = '') {
 //    return !DEVELOPMENT_MODE;
 //});
 
+// --- Encryption Utilities ---
+define('ENCRYPTION_METHOD', 'aes-256-cbc'); // AES 256-bit encryption in CBC mode
+define('PBKDF2_ITERATIONS', 10000); // Number of iterations for PBKDF2
+
+// Function to generate a user-specific salt for key derivation
+function generate_encryption_salt() {
+    return random_bytes(16); // 16 bytes for salt
+}
+
+// Function to derive a strong encryption key from user's password and salt
+function derive_encryption_key($password, $salt) {
+    if (empty($password) || empty($salt)) {
+        // log_error("Password or salt is empty for key derivation.", __FILE__, __LINE__);
+        return false; // Or throw an exception
+    }
+    // Use PBKDF2 to derive a key. The key length should match the chosen cipher.
+    // For AES-256, we need a 32-byte (256-bit) key.
+    $derived_key = hash_pbkdf2("sha256", $password, $salt, PBKDF2_ITERATIONS, 32, true); // true for raw binary output
+    return $derived_key;
+}
+
+// Function to encrypt data
+function encrypt_data($data, $key) {
+    if (empty($key)) {
+        // log_error("Encryption key is empty.", __FILE__, __LINE__);
+        return false;
+    }
+    $iv_length = openssl_cipher_iv_length(ENCRYPTION_METHOD);
+    if ($iv_length === false) {
+        // log_error("Could not get IV length for " . ENCRYPTION_METHOD, __FILE__, __LINE__);
+        return false;
+    }
+    $iv = openssl_random_pseudo_bytes($iv_length);
+    $ciphertext = openssl_encrypt($data, ENCRYPTION_METHOD, $key, OPENSSL_RAW_DATA, $iv);
+    if ($ciphertext === false) {
+        // log_error("OpenSSL encryption failed: " . openssl_error_string(), __FILE__, __LINE__);
+        return false;
+    }
+    // Prepend IV to ciphertext for storage/transmission then base64 encode
+    return base64_encode($iv . $ciphertext);
+}
+
+// Function to decrypt data
+function decrypt_data($iv_ciphertext_base64, $key) {
+    if (empty($key)) {
+        // log_error("Decryption key is empty.", __FILE__, __LINE__);
+        return false;
+    }
+    $iv_ciphertext = base64_decode($iv_ciphertext_base64);
+    if ($iv_ciphertext === false) {
+        // log_error("Base64 decode failed for encrypted data.", __FILE__, __LINE__);
+        return false;
+    }
+
+    $iv_length = openssl_cipher_iv_length(ENCRYPTION_METHOD);
+    if ($iv_length === false) {
+        // log_error("Could not get IV length for " . ENCRYPTION_METHOD, __FILE__, __LINE__);
+        return false;
+    }
+    $iv = substr($iv_ciphertext, 0, $iv_length);
+    $ciphertext = substr($iv_ciphertext, $iv_length);
+
+    if (strlen($iv) !== $iv_length) {
+        // log_error("IV length mismatch. Expected $iv_length, got " . strlen($iv), __FILE__, __LINE__);
+        return false; // IV is not the correct length
+    }
+
+    $decrypted_data = openssl_decrypt($ciphertext, ENCRYPTION_METHOD, $key, OPENSSL_RAW_DATA, $iv);
+    if ($decrypted_data === false) {
+        // log_error("OpenSSL decryption failed: " . openssl_error_string(), __FILE__, __LINE__);
+        // This can happen if the key is wrong, IV is wrong, or data is corrupted.
+        return false;
+    }
+    return $decrypted_data;
+}
+
 ?>

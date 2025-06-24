@@ -5,14 +5,14 @@ header('Content-Type: application/json');
 $response = ['success' => false, 'message' => '', 'errors' => []];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
+    $username_input = trim($_POST['username'] ?? ''); // Renamed to avoid conflict with $user['username']
+    $password_input = $_POST['password'] ?? ''; // Renamed
 
     // --- Basic Validation ---
-    if (empty($username)) {
-        $response['errors']['username'] = 'Username is required.';
+    if (empty($username_input)) {
+        $response['errors']['username'] = 'Username or Email is required.';
     }
-    if (empty($password)) {
+    if (empty($password_input)) {
         $response['errors']['password'] = 'Password is required.';
     }
 
@@ -25,48 +25,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // --- Authenticate User ---
     try {
         $pdo = getDBConnection();
-        $stmt = $pdo->prepare("SELECT id, username, password, role, email FROM users WHERE username = ? OR email = ?");
-        $stmt->execute([$username, $username]); // Allow login with username or email
-        $user = $stmt->fetch();
+        // Fetch encryption_salt, 2fa status along with other user details
+        $stmt = $pdo->prepare("SELECT id, username, password, role, email, twofa_enabled, twofa_secret, encryption_salt FROM users WHERE username = ? OR email = ?");
+        $stmt->execute([$username_input, $username_input]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($user) {
-            // Verify password
-            if (password_verify($password, $user['password'])) {
-                // Password is correct, set up session
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['username'] = $user['username'];
-                // Password is correct, check for 2FA
-                if ($user['twofa_enabled'] == 1 && !empty($user['twofa_secret'])) {
-                    // 2FA is enabled, require OTP
-                    $_SESSION['2fa_user_id'] = $user['id']; // Store user ID for OTP verification step
-                    $_SESSION['2fa_pending'] = true;
-                    // session_regenerate_id(true); // Regenerate session ID here too for security before OTP step
+            if (password_verify($password_input, $user['password'])) {
+                // Password is correct. Derive encryption key.
+                if (empty($user['encryption_salt'])) {
+                    log_error("Login attempt for user ID {$user['id']} ('{$user['username']}') without encryption salt.", __FILE__, __LINE__);
+                    $response['message'] = 'Login failed: Account configuration error (ERR_NO_SALT). Please contact support.';
+                    echo json_encode($response);
+                    exit;
+                }
 
-                    $response['success'] = true; // Password was correct
+                $encryption_key = derive_encryption_key($password_input, $user['encryption_salt']);
+                if ($encryption_key === false) {
+                    log_error("Failed to derive encryption key for user ID {$user['id']} ('{$user['username']}').", __FILE__, __LINE__);
+                    $response['message'] = 'Login failed: Could not prepare for secure session (ERR_KEY_DERIV).';
+                    echo json_encode($response);
+                    exit;
+                }
+                $_SESSION['encryption_key'] = base64_encode($encryption_key); // Store base64 encoded key
+
+                // Check for 2FA
+                if ($user['twofa_enabled'] == 1 && !empty($user['twofa_secret'])) {
+                    $_SESSION['2fa_user_id'] = $user['id'];
+                    $_SESSION['2fa_pending'] = true;
+                    // Store other necessary user details TEMPORARILY for verify_2fa.php to use after OTP
+                    $_SESSION['temp_user_data'] = [
+                        'id' => $user['id'],
+                        'username' => $user['username'],
+                        'role' => $user['role'],
+                        'email' => $user['email']
+                        // DO NOT store encryption_key or password here for the second step.
+                        // The encryption_key is already in session.
+                    ];
+                    // session_regenerate_id(true); // Regenerate before OTP step
+
+                    $response['success'] = true;
                     $response['twofa_required'] = true;
                     $response['message'] = 'Password correct. Please enter your Two-Factor Authentication code.';
-                    // No redirect_url here, frontend will show OTP input
                 } else {
-                    // 2FA not enabled or no secret, proceed with normal login
+                    // No 2FA, complete login
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['user_role'] = $user['role'];
                     $_SESSION['user_email'] = $user['email'];
+                    // $_SESSION['encryption_key'] is already set
                     session_regenerate_id(true);
-
                     $response['success'] = true;
                     $response['message'] = 'Login successful! Redirecting...';
                     $response['redirect_url'] = '/dashboard';
                 }
             } else {
-                // Invalid password
                 $response['message'] = 'Invalid username or password.';
-                // $response['errors']['password'] = 'Invalid credentials.'; // More generic error for security
             }
         } else {
             // User not found
             $response['message'] = 'Invalid username or password.';
-            // $response['errors']['username'] = 'Invalid credentials.';
         }
 
     } catch (PDOException $e) {

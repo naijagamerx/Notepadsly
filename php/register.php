@@ -69,10 +69,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // --- Hash password and insert user ---
         $hashed_password = password_hash($password, PASSWORD_DEFAULT); // Use default strong hashing
+        $encryption_salt = generate_encryption_salt(); // Generate salt for note encryption
 
-        $stmt = $pdo->prepare("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO users (username, email, password, role, encryption_salt) VALUES (?, ?, ?, ?, ?)");
         // New users are 'user' by default. Admin creation would be a separate process.
-        if ($stmt->execute([$username, $email, $hashed_password, 'user'])) {
+        if ($stmt->execute([$username, $email, $hashed_password, 'user', $encryption_salt])) {
             $response['success'] = true;
             $response['message'] = 'Registration successful! You can now log in.';
             // Optionally, log the user in directly here by setting session variables

@@ -1,5 +1,9 @@
 <?php
-require_once 'config.php'; // Ensures session_start()
+require_once __DIR__ . '/config.php'; // Adjusted path
+
+// --- Conceptual TOTP Library Includes ---
+// require_once __DIR__ . '/../lib/TwoFactorAuth/lib/TwoFactorAuth.php';
+// $site_name_for_2fa = 'Notepadsly'; // Should match issuer name used in user_settings_handler.php
 
 header('Content-Type: application/json');
 
@@ -13,56 +17,94 @@ if (!isset($_SESSION['2fa_pending']) || !$_SESSION['2fa_pending'] || !isset($_SE
     exit;
 }
 
-$otp_code = trim($_POST['otp_code'] ?? '');
-if (empty($otp_code)) {
+$otp_code_input = trim($_POST['otp_code'] ?? '');
+if (empty($otp_code_input)) {
     echo json_encode(['success' => false, 'message' => 'OTP code is required.']);
     exit;
 }
+// Normalize OTP input: remove spaces or dashes if user entered them formatted
+$otp_code_normalized = str_replace([' ', '-'], '', $otp_code_input);
+
 
 $user_id_for_2fa = $_SESSION['2fa_user_id'];
 $pdo = getDBConnection();
 
 try {
-    $stmt_user = $pdo->prepare("SELECT id, username, email, role, twofa_secret, twofa_enabled FROM users WHERE id = ?");
+    $stmt_user = $pdo->prepare("SELECT id, username, email, role, twofa_secret, twofa_enabled, twofa_recovery_codes FROM users WHERE id = ?");
     $stmt_user->execute([$user_id_for_2fa]);
     $user = $stmt_user->fetch(PDO::FETCH_ASSOC);
 
     if (!$user || !$user['twofa_enabled'] || empty($user['twofa_secret'])) {
         log_error("2FA Verification: User ID $user_id_for_2fa not found, 2FA not enabled, or no secret stored.", __FILE__, __LINE__);
-        // Clear pending 2FA state as it's invalid
-        unset($_SESSION['2fa_pending']);
-        unset($_SESSION['2fa_user_id']);
+        unset($_SESSION['2fa_pending']); unset($_SESSION['2fa_user_id']); unset($_SESSION['temp_user_data']);
         echo json_encode(['success' => false, 'message' => '2FA setup error for user. Please try logging in again.']);
         exit;
     }
 
-    // STUB: OTP Verification (replace with actual library call)
-    // $google2fa = new \PragmaRX\Google2FAQRCode\Google2FA();
-    // $is_valid_otp = $google2fa->verifyKey($user['twofa_secret'], $otp_code);
-    $is_valid_otp = ($otp_code === '123456'); // Placeholder for testing
+    // --- Real TOTP Library Usage (Conceptual) ---
+    // $tfa = new \RobThree\Auth\TwoFactorAuth($site_name_for_2fa);
+    // $is_valid_otp = $tfa->verifyCode($user['twofa_secret'], $otp_code_normalized);
+    $is_valid_otp = ($otp_code_normalized === '123456' && !empty($user['twofa_secret'])); // Updated STUB
+
+    $recovery_code_used = false;
+    if (!$is_valid_otp) {
+        // Try as a recovery code if OTP failed
+        $stored_hashed_recovery_codes_json = $user['twofa_recovery_codes'];
+        if (!empty($stored_hashed_recovery_codes_json)) {
+            $hashed_recovery_codes = json_decode($stored_hashed_recovery_codes_json, true);
+            if (is_array($hashed_recovery_codes)) {
+                $remaining_hashed_codes = [];
+                foreach ($hashed_recovery_codes as $hashed_code) {
+                    // Note: $otp_code_input should be the raw one for recovery, not $otp_code_normalized if it's alphanumeric
+                    if (password_verify($otp_code_input, $hashed_code)) {
+                        $is_valid_otp = true; // Treat recovery code as valid OTP for login
+                        $recovery_code_used = true;
+                        // This code is now used, don't add it to $remaining_hashed_codes
+                    } else {
+                        $remaining_hashed_codes[] = $hashed_code;
+                    }
+                }
+                if ($recovery_code_used) {
+                    // Update stored recovery codes (remove the used one)
+                    $new_recovery_codes_json = json_encode(array_values($remaining_hashed_codes)); // Re-index
+                    $stmt_update_recovery = $pdo->prepare("UPDATE users SET twofa_recovery_codes = ? WHERE id = ?");
+                    $stmt_update_recovery->execute([$new_recovery_codes_json, $user_id_for_2fa]);
+                }
+            }
+        }
+    }
+
 
     if ($is_valid_otp) {
-        // OTP is correct, complete login
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['username'] = $user['username'];
-        $_SESSION['user_role'] = $user['role'];
-        $_SESSION['user_email'] = $user['email'];
+        if (!isset($_SESSION['temp_user_data']) || !isset($_SESSION['encryption_key'])) {
+            log_error("2FA Verification: Missing temp_user_data or encryption_key for user ID $user_id_for_2fa.", __FILE__, __LINE__);
+            session_unset(); session_destroy(); session_start();
+            echo json_encode(['success' => false, 'message' => 'Session error during 2FA. Please login again.']);
+            exit;
+        }
 
-        // Clear 2FA pending state
-        unset($_SESSION['2fa_pending']);
-        unset($_SESSION['2fa_user_id']);
+        $temp_user_data = $_SESSION['temp_user_data'];
+        $_SESSION['user_id'] = $temp_user_data['id'];
+        $_SESSION['username'] = $temp_user_data['username'];
+        $_SESSION['user_role'] = $temp_user_data['role'];
+        $_SESSION['user_email'] = $temp_user_data['email'];
+        // $_SESSION['encryption_key'] is preserved.
 
-        session_regenerate_id(true); // Regenerate session ID after successful full authentication
+        unset($_SESSION['2fa_pending']); unset($_SESSION['2fa_user_id']); unset($_SESSION['temp_user_data']);
+        session_regenerate_id(true);
 
-        // Update last_login_at (if this field exists - requires schema change)
+        // Add last_login_at to schema.sql: ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP NULL DEFAULT NULL;
         // $stmt_update_last_login = $pdo->prepare("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?");
-        // $stmt_update_last_login->execute([$user['id']]);
+        // $stmt_update_last_login->execute([$_SESSION['user_id']]);
 
-        echo json_encode(['success' => true, 'message' => 'Login successful! Redirecting...', 'redirect_url' => '/dashboard']);
+        $login_message = 'Login successful! Redirecting...';
+        if ($recovery_code_used) {
+            $login_message = 'Login successful using a recovery code! You should generate new recovery codes if this was an emergency. Redirecting...';
+            // Frontend could show a stronger warning about recovery codes.
+        }
+        echo json_encode(['success' => true, 'message' => $login_message, 'redirect_url' => '/dashboard']);
     } else {
-        // Invalid OTP
-        // Optional: Implement attempt limits / lockout here
-        echo json_encode(['success' => false, 'message' => 'Invalid OTP code. Please try again.']);
+        echo json_encode(['success' => false, 'message' => 'Invalid OTP or Recovery code. Please try again.']);
     }
 
 } catch (PDOException $e) {
