@@ -65,6 +65,25 @@
                 Already have an account? <a href="#" id="showLogin">Log in</a>
             </p>
         </div>
+
+        <div class="auth-form-container" id="otpFormContainer" style="display: none;">
+            <img src="../assets/logo.png" alt="Notepadsly Logo" class="auth-logo">
+            <h2>Enter Verification Code</h2>
+            <p>Enter the 6-digit code from your authenticator app.</p>
+            <form id="otpForm">
+                <div class="form-group">
+                    <label for="otpCode">One-Time Password (OTP)</label>
+                    <input type="text" id="otpCode" name="otp_code" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" style="text-align:center; font-size: 1.2em; letter-spacing: 2px;">
+                </div>
+                <button type="submit" class="auth-button">Verify Code</button>
+                <div class="form-message" id="otpMessage"></div>
+            </form>
+            <!-- Add link for "Use a recovery code" later -->
+             <p class="auth-switch" style="margin-top: 20px;">
+                <a href="#" id="cancelOtpLogin">Cancel and go back to Login</a>
+            </p>
+        </div>
+
     </div>
 
     <script src="../js/auth.js"></script>
