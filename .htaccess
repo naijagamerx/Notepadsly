@@ -50,9 +50,9 @@ RewriteRule ^forgot-password/?$ php/forgot_password_page.php [L]
 # Prevent directory listing
 Options -Indexes
 
-# Optional: Force HTTPS (Uncomment if SSL is configured)
-# RewriteCond %{HTTPS} off
-# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# Force HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # Default charset
 AddDefaultCharset UTF-8

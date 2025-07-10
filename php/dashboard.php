@@ -12,7 +12,7 @@ require_once __DIR__ . '/../lib/PHPMailer/src/SMTP.php';
 
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: /login");
+    header("Location: " . BASE_URL . "login"); // Use BASE_URL
     exit;
 }
 $user_id = $_SESSION['user_id'];
@@ -106,9 +106,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'share_note') { // Changed t
         $stmt_admin_settings = $pdo->query("SELECT setting_key, setting_value FROM admin_settings");
         $config_from_db = $stmt_admin_settings->fetchAll(PDO::FETCH_KEY_PAIR);
         $site_name = $config_from_db['site_name'] ?? 'Notepadsly';
-        $http_host = $_SERVER['HTTP_HOST'] ?? ($config_from_db['site_url'] ?? 'localhost');
-        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || ($_SERVER['SERVER_PORT'] ?? 80) == 443) ? "https" : "http";
-        $note_link = $protocol . '://' . $http_host . '/dashboard#note=' . $note_id_to_share;
+        // $http_host = $_SERVER['HTTP_HOST'] ?? ($config_from_db['site_url'] ?? 'localhost');
+        // $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || ($_SERVER['SERVER_PORT'] ?? 80) == 443) ? "https" : "http";
+        // $note_link = $protocol . '://' . $http_host . '/dashboard#note=' . $note_id_to_share;
+        $note_link = rtrim(BASE_URL, '/') . '/dashboard#note=' . $note_id_to_share; // Use BASE_URL
 
         $email_subject_share = "Note '$note_title_decrypted' has been shared with you on $site_name";
         $email_body_html_share = "<p>Hello $recipient_username,</p><p>$sharer_username has shared the note '<strong>$note_title_decrypted</strong>' with you on $site_name (permission: $permission).</p>";

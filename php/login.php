@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     session_regenerate_id(true);
                     $response['success'] = true;
                     $response['message'] = 'Login successful! Redirecting...';
-                    $response['redirect_url'] = '/dashboard';
+                    $response['redirect_url'] = BASE_URL . 'dashboard'; // Use BASE_URL
                 }
             } else {
                 $response['message'] = 'Invalid username or password.';

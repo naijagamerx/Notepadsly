@@ -19,6 +19,6 @@ session_destroy();
 
 // Redirect to login page or home page
 // The prompt doesn't specify a landing page after logout, index.html (login page) seems appropriate.
-header("Location: /login"); // Updated to extension-less URL
+header("Location: " . BASE_URL . "login"); // Use BASE_URL
 exit;
 ?>

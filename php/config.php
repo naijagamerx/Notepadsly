@@ -6,7 +6,54 @@ define('DB_USER', 'root');      // As per prompt
 define('DB_PASSWORD', 'root');  // As per prompt
 
 // Site configuration
-define('SITE_ROOT', __DIR__); // Or adjust if your public folder is different
+define('SITE_ROOT', dirname(__DIR__)); // Project root (one level up from 'php/' directory)
+
+// Determine BASE_URL dynamically
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443 ? "https://" : "http://";
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost'; // Get host
+
+// Calculate the base path of the application
+// This logic assumes SITE_ROOT is the actual root directory of the web application
+// and that it's accessible under DOCUMENT_ROOT.
+$document_root_norm = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+$site_root_norm = rtrim(str_replace('\\', '/', SITE_ROOT), '/');
+
+if (isset($_SERVER['DOCUMENT_ROOT']) && strpos($site_root_norm, $document_root_norm) === 0) {
+    $base_path = substr($site_root_norm, strlen($document_root_norm));
+} else {
+    // Fallback if not directly under document root or if DOCUMENT_ROOT is not set (e.g. CLI)
+    // This often means the app is at the root of the host, or needs manual config for complex setups.
+    // A common scenario for dirname($_SERVER['SCRIPT_NAME']) is if an index.php is in a subfolder.
+    // However, since config.php is included, SCRIPT_NAME refers to the entry script.
+    // If entry script is at project root (e.g. /index.php or /subdir/index.php),
+    // dirname will give '/' or '/subdir'.
+    $script_dir = dirname(str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''));
+    // If config.php is in 'php/', then SCRIPT_NAME's dirname is the location of the *executing* script.
+    // We need the path to the project root.
+    // If SITE_ROOT is reliable, use it. Otherwise, this might need to be manually set.
+    // For this project, assuming 'php' is one level down from project root.
+    // So, if script_dir is /project/php, we want /project.
+    // If script_dir is /project (because index.php is at root), we want /project.
+    // This part is tricky without knowing the exact entry point structure relative to SITE_ROOT.
+    // A simpler robust approach if the above fails: assume project is in a subdir that's part of SCRIPT_NAME
+    // and config.php is in php/, so go one level up from where the executing script's dir is.
+    // Example: /myapp/php/some_handler.php -> dirname is /myapp/php. We want /myapp/.
+    // Example: /myapp/index.php (includes php/config.php) -> dirname is /myapp. We want /myapp/.
+    // This logic is simplified by using SITE_ROOT relative to DOCUMENT_ROOT as the primary method.
+    // Fallback to dirname of SCRIPT_NAME if it is not in a 'php' subfolder of the apparent root.
+    if (basename($script_dir) === 'php' && $script_dir !== '/php') { // if script is in a 'php' subdirectory not at webroot
+        $base_path = dirname($script_dir);
+    } else {
+        $base_path = $script_dir;
+    }
+}
+
+// Ensure base_path starts with a slash and ends with a slash for consistency.
+$base_path = '/' . trim($base_path, '/') . '/';
+// Replace multiple slashes with a single slash (e.g. if $base_path was '/' it becomes '//' then fixed to '/')
+$base_path = preg_replace('#//#', '/', $base_path);
+
+define('BASE_URL', $protocol . $host . $base_path);
 
 // Error reporting - Development vs Production
 // For development, show all errors. For production, log errors and show a generic message.

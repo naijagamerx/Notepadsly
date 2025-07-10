@@ -35,8 +35,8 @@ if (!$token) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reset Password - Notepadsly</title>
-    <link rel="stylesheet" href="../css/style.css">
-    <link rel="stylesheet" href="../css/auth.css">
+    <link rel="stylesheet" href="<?php echo rtrim(BASE_URL, '/'); ?>/css/style.css">
+    <link rel="stylesheet" href="<?php echo rtrim(BASE_URL, '/'); ?>/css/auth.css">
     <style>
         /* Additional specific styles if needed */
         .reset-container { padding-top: 30px; }
@@ -47,9 +47,9 @@ if (!$token) {
         <h2>Reset Your Password</h2>
         <?php if (!empty($error_message)): ?>
             <div class="form-message error" style="display:block;"><?php echo htmlspecialchars($error_message); ?></div>
-            <p><a href="/login">Back to Login</a></p>
+            <p><a href="<?php echo BASE_URL; ?>login">Back to Login</a></p>
         <?php elseif ($show_form): ?>
-            <form id="passwordResetForm" action="../php/handle_password_reset.php" method="POST">
+            <form id="passwordResetForm" action="<?php echo BASE_URL; ?>php/handle_password_reset.php" method="POST">
                 <input type="hidden" name="token" value="<?php echo htmlspecialchars($token); ?>">
                 <div class="form-group">
                     <label for="new_password">New Password</label>

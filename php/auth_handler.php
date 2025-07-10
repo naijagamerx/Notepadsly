@@ -21,7 +21,7 @@ if ($action === 'request_password_reset') {
     if (empty($email_input) || !filter_var($email_input, FILTER_VALIDATE_EMAIL)) {
         $_SESSION['forgot_password_message'] = 'Please enter a valid email address.';
         $_SESSION['forgot_password_message_type'] = 'error';
-        header('Location: /forgot-password'); // Redirect back to the form page
+        header('Location: ' . BASE_URL . 'forgot-password'); // Redirect back to the form page
         exit;
     }
 
@@ -46,9 +46,10 @@ if ($action === 'request_password_reset') {
                 $stmt_admin_settings = $pdo->query("SELECT setting_key, setting_value FROM admin_settings");
                 $config_from_db = $stmt_admin_settings->fetchAll(PDO::FETCH_KEY_PAIR);
                 $site_name = $config_from_db['site_name'] ?? 'Notepadsly';
-                $http_host = $_SERVER['HTTP_HOST'] ?? ($config_from_db['site_url'] ?? 'localhost');
-                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || ($_SERVER['SERVER_PORT'] ?? 80) == 443) ? "https" : "http";
-                $reset_link = $protocol . '://' . $http_host . '/reset-password?token=' . $token;
+                // $http_host = $_SERVER['HTTP_HOST'] ?? ($config_from_db['site_url'] ?? 'localhost');
+                // $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || ($_SERVER['SERVER_PORT'] ?? 80) == 443) ? "https" : "http";
+                // $reset_link = $protocol . '://' . $http_host . '/reset-password?token=' . $token;
+                $reset_link = rtrim(BASE_URL, '/') . '/reset-password?token=' . $token; // Use BASE_URL
 
                 $email_subject = "Password Reset Request for $site_name";
                 $email_body_html = "<p>Hello $username,</p><p>A password reset was requested for your account on $site_name.</p>";
@@ -113,12 +114,12 @@ if ($action === 'request_password_reset') {
         $_SESSION['forgot_password_message'] = 'An unexpected error occurred. Please try again later.';
         $_SESSION['forgot_password_message_type'] = 'error';
     }
-    header('Location: /forgot-password');
+    header('Location: ' . BASE_URL . 'forgot-password');
     exit;
 
 } else {
     // No action or unknown action, redirect to login or home
-    header('Location: /login');
+    header('Location: ' . BASE_URL . 'login');
     exit;
 }
 ?>
